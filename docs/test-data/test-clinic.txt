@@ -1,0 +1,13 @@
+CLINIC INTAKE RECORD
+
+Patient: Sarah Johnson
+Date of birth: 03/14/1985
+SSN: 123-45-6789
+MRN: A1234567
+Phone: (555) 123-4567
+Email: sarah.johnson@example.com
+
+Dr. Michael Chen reviewed the case on 10/20/2026. Ms. Johnson reports a penicillin allergy.
+Johnson was referred to cardiology; Dr. Chen recommends a follow-up in 6 weeks.
+
+Billing: Account No: 98765432. Card on file 4111 1111 1111 1111.
