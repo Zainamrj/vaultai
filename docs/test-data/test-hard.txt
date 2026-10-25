@@ -1,0 +1,7 @@
+Borrower: Ahmed Al-Rashid
+Address: 14 King Fahd Road, Dammam 32241
+Phone: +966 50 123 4567
+Employer: Aramco, salary 18,500 SAR
+Contact Ahmed at ahmed.rashid@mail.com or call 0501234567.
+IBAN: SA0380000000608010167519
+Mr. Khan approved the loan on 2026-10-12.
