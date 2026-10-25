@@ -8,6 +8,7 @@
 - Oct 25: The only embedding model listed on Token Factory is Qwen (not an NVIDIA model). Nemotron handles all generation and judging.
 - Oct 25: Prices checked in the console: Nano $0.06/$0.24, Super $0.30/$0.90, Ultra $1.00/$3.00 per 1M tokens (in/out). Trial credit: $1.00.
 - Friction: model IDs differ in case and format (e.g. NVIDIA-Nemotron-3-Nano vs nemotron-3-super), so they are kept in env vars.
+-Oct 25: real /api/judge with Ultra returned verified, score 5, in 1,081 ms on a short example (answers from Super take about 1 to 1.4 s).
 
 ## Decisions and why
 - Session state (chunks, vectors, audit log) lives in the browser, so the server is stateless. This avoids serverless timeouts and makes Purge honest.
