@@ -2,17 +2,17 @@
     {
       "id": "q1",
       "type": "answerable",
-      "doc": "billing_statement.txt",
+      "doc": "clinical_billing_statement.txt",
       "question": "What is the total amount charged for the visit before insurance?",
       "expected": "£596.70",
       "mustContain": [
-        "596.70"
+        "569.70"
       ]
     },
     {
       "id": "q2",
       "type": "answerable",
-      "doc": "billing_statement.txt",
+      "doc": "clinical_billing_statement.txt",
       "question": "How much did the insurance plan pay?",
       "expected": "£300.00 (80% of eligible charges)",
       "mustContain": [
@@ -22,7 +22,7 @@
     {
       "id": "q3",
       "type": "answerable",
-      "doc": "billing_statement.txt",
+      "doc": "clinical_billing_statement.txt",
       "question": "How much is each installment on the payment plan, and how many installments are there?",
       "expected": "3 installments of £32.50",
       "mustContain": [
@@ -66,7 +66,7 @@
       "type": "answerable",
       "doc": "patient_intake_form.txt",
       "question": "What drug allergy does the patient have?",
-      "expected": "Penicillin (skin rash)",
+      "expected": "Penicillin(skin rash)",
       "mustContain": [
         "penicillin"
       ]

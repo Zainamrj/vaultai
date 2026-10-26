@@ -12,8 +12,8 @@ Insurance Member ID: GFD-6341-6351
 Registration Date: 09/08/2026
 
 
-Referrring Physician
-Dr. Fuori Rosso referred the patient for evaluation of persistent fatigue.
+Referrring Physician: 
+Dr. Fuori Rosso
 
 Complaints
 The patient reports about 3 weeks of persistent fatigue, increased thirst and
@@ -31,8 +31,7 @@ Temperature: 36.7 C
 
 
 Allergies
-Penicillin (causes a skin rash). 
-No other known drug Allergies
+No known drug Allergies
 
 
 Current Medications
