@@ -1,0 +1,29 @@
+Iris Quay Clinic
+[New Patient Intake Form]
+
+(Synthetic Test Document. All data is fictional)
+
+Patient Name: Flora Vero 
+Phone: 07758358295
+Date of Birth: 
+Address: Flat 80,Sunflower House,Connors Road, NW 123
+Email: flora.vero98@gmail.com
+SSN: 876-09-4365
+Insurance Member ID: GFD-6341-6351
+Registration Date: 09/08/2026
+
+
+Referrring Physician: 
+
+Complaint:
+
+Measurements
+
+
+Allergies
+
+Current Medications
+
+Family History
+
+Intake Completed on 09/08/2026
