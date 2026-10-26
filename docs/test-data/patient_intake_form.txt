@@ -6,35 +6,41 @@ Patient Name: Flora Vero
 Phone: 07758358295
 Date of Birth: 25/01/1999
 Address: Flat 80,Sunflower House,Connors Road, NW 123
-Email: flora.vero98@gmail.com
+Email: flora.vero98@example.com
 SSN: 876-09-4365
 Insurance Member ID: GFD-6341-6351
 Registration Date: 09/08/2026
 
 
-Referrring Physician: 
-Dr. Fuori Rosso
+Referrring Physician
+Dr. Fuori Rosso referred the patient for evaluation of persistent fatigue.
 
-Complaints:
+Complaints
+The patient reports about 3 weeks of persistent fatigue, increased thirst and
+frequent urination. He also reports occasional headaches in the evening. He
+denies chest pain and shortness of breath.
+
 
 Measurements at intake time
 
-Weight:
-Height:
-Blood Pressure:
-Heart Rate:
+Weight: 70 kg
+Height: 179 cm
+Blood Pressure: 123/70 mmHg
+Heart Rate: 78 beats per minute
 Temperature: 36.7 C
 
 
 Allergies
-No known drug Allergies
+Penicillin (causes a skin rash). 
+No other known drug Allergies
 
 
 Current Medications
+Lisinopril 10 mg once daily for blood pressure.
+Metformin 500 mg twice daily, started after a prior HbA1c of 7.9%.
 
 Family History
-
-Mother has Type 2 diabetes
-Father is a smoker
+Father had type 2 diabetes. Mother had hypertension. The patient does not
+smoke and reports drinking about 4 alcoholic drinks per week.
 
 Intake Completed on 09/08/2026
