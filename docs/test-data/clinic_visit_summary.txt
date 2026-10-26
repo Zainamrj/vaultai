@@ -10,7 +10,7 @@ Email: flora.vero98@example.com
 SSN: 876-09-4365
 Insurance Member ID: GFD-6341-6351
 Visit Date: 09/09/2026
-Attending: Dr. Priya Raman
+Attending: Dr. Leo Raman
 
 Diagnosis
 Type 2 diabetes mellitus with inadequately controlled blood glucose, together
@@ -40,7 +40,7 @@ Treatment Plan
 
 Follow Up
 Return in 6 weeks for repeat blood pressure check and lab work. Appointment
-scheduled for 02/24/2025. The patient should contact the clinic sooner if
+scheduled for 02/11/2027. The patient should contact the clinic sooner if
 fasting glucose exceeds 250 mg/dL or if blood pressure exceeds 180/110 mmHg.
 
 Penicillin allergy re-confirmed. No new adverse reactions recorded.

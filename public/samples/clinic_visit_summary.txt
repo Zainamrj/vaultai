@@ -6,23 +6,41 @@ Patient Name: Flora Vero
 Phone: 07758358295
 Date of Birth: 25/01/1999
 Address: Flat 80,Sunflower House,Connors Road, NW 123
-Email: flora.vero98@gmail.com
+Email: flora.vero98@example.com
 SSN: 876-09-4365
 Insurance Member ID: GFD-6341-6351
-Registration Date: 09/08/2026
+Visit Date: 09/09/2026
+Attending: Dr. Leo Raman
 
 Diagnosis
+Type 2 diabetes mellitus with inadequately controlled blood glucose, together
+with stage 2 hypertension.
+
 
 Lab Result
+HbA1c: 8.4%
+Fasting glucose: 162 mg/dL
+Total cholesterol: 214 mg/dL
+Blood pressure at visit: 152/94 mmHg
+Weight at visit: 70 kg
 
 Assessment
-
+Glucose control has worsened compared with the previous HbA1c of 7.9%. Blood
+pressure remains above target on the current dose of lisinopril. The patient
+reports good adherence to medication.
 
 Treatment Plan
-
+1. Increase metformin from 500 mg twice daily to 1000 mg twice daily.
+2. Continue lisinopril 10 mg once daily.
+3. Add amlodipine 5 mg once daily to improve blood pressure control.
+4. Refer to a dietitian for 4 sessions focused on carbohydrate management.
+5. Target HbA1c below 7.0%. Target weight loss of 5 kg over 6 months.
+6. Home blood pressure monitoring twice daily, with a log to bring to the
+   next appointment.
 
 Follow Up
+Return in 6 weeks for repeat blood pressure check and lab work. Appointment
+scheduled for 02/11/2027. The patient should contact the clinic sooner if
+fasting glucose exceeds 250 mg/dL or if blood pressure exceeds 180/110 mmHg.
 
-
-
-Visit Summary Completed on 01/11/2026
+Penicillin allergy re-confirmed. No new adverse reactions recorded.
