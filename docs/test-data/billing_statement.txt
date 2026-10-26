@@ -1,0 +1,30 @@
+Iris Quay Clinic
+[Billing Statement]
+(Synthetic Test Document. All data is fictional)
+
+Patient Name: Flora Vero 
+Phone: 07758358295
+Date of Birth: 25/01/1999
+Address: Flat 80,Sunflower House,Connors Road, NW 123
+Email: flora.vero98@gmail.com
+SSN: 876-09-4365
+Insurance Member ID: GFD-6341-6351
+Registration Date: 09/08/2026
+
+
+Charges for October Visit
+Consultation: £400.00
+Laboratory: £100.70
+HbA1c test: £69.00
+Total Charges: £569.70
+
+Insurance Adjustment
+The insurance plan covers 80% of eligible charges.
+Insurance Applied: £300.00
+
+Patient Balance
+
+Payment Options
+
+
+Billing Completed on 26/12/2026
