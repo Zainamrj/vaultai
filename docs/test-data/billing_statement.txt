@@ -1,30 +1,40 @@
 Iris Quay Clinic
-[Billing Statement]
+[Clinic Visit Summary Document]
 (Synthetic Test Document. All data is fictional)
 
 Patient Name: Flora Vero 
 Phone: 07758358295
 Date of Birth: 25/01/1999
 Address: Flat 80,Sunflower House,Connors Road, NW 123
-Email: flora.vero98@gmail.com
+Email: flora.vero98@example.com
+IBAN: DE89 3704 0044 0532 0130 00
 SSN: 876-09-4365
 Insurance Member ID: GFD-6341-6351
 Registration Date: 09/08/2026
+Statement Date: 20/10/2026
+Payment Due: 20/12/2026
 
 
 Charges for October Visit
 Consultation: £400.00
-Laboratory: £100.70
+Laoratory: £100.70
 HbA1c test: £69.00
-Total Charges: £569.70
+Total Charges: £569.00
 
 Insurance Adjustment
 The insurance plan covers 80% of eligible charges.
-Insurance Applied: £300.00
+Insurance Applied: £455.20
 
 Patient Balance
+Amount owed by patient after insurance: £113.80
 
 Payment Options
+The patient has chosen the clinic payment plan: 3 equal monthly installments
+of £189.60, collected by direct debit from the account above. The first
+installment will be collected on 20/10/2026. A late fee of £15.00 applies to
+any installment more than 10 days overdue.
 
 
 Billing Completed on 26/12/2026
+Questions about this statement can be sent to irisquayclinic@.example.com
+or by calling (555) 019-2240 during business hours.
