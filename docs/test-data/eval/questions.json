@@ -66,7 +66,7 @@
       "type": "answerable",
       "doc": "patient_intake_form.txt",
       "question": "What drug allergy does the patient have?",
-      "expected": "Penicillin (skin rash)",
+      "expected": "Penicillin(skin rash)",
       "mustContain": [
         "penicillin"
       ]
