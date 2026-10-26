@@ -27,7 +27,7 @@ Temperature: 36.7 C
 
 
 Allergies
-No known drug Allergies
+penincillin(skin rash)
 
 
 Current Medications
