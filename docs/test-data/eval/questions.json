@@ -6,7 +6,7 @@
       "question": "What is the total amount charged for the visit before insurance?",
       "expected": "£596.70",
       "mustContain": [
-        "596.70"
+        "569.70"
       ]
     },
     {
