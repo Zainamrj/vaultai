@@ -14,9 +14,9 @@
       "type": "answerable",
       "doc": "billing_statement.txt",
       "question": "How much did the insurance plan pay?",
-      "expected": "£455.00 (80% of eligible charges)",
+      "expected": "£455.20 (80% of eligible charges)",
       "mustContain": [
-        "455"
+        "455.20"
       ]
     },
     {
@@ -43,7 +43,7 @@
       "id": "q5",
       "type": "answerable",
       "doc": "clinic_visit_summary.txt",
-      "question": "Which medication was added to improve blood pressure control, and at what dose?",
+      "question": "Which medication was added to improve blood pressure control and at what dose?",
       "expected": "Amlodipine 5 mg once daily",
       "mustContain": [
         "amlodipine",
