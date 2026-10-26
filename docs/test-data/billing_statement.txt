@@ -18,8 +18,13 @@ Laoratory: £100.70
 HbA1c test: £69.00
 Total Charges: £569.70
 
+Insurance Adjustment
+The insurance plan covers 80% of eligible charges.
+Insurance Applied: £300.00
+
 Patient Balance
 
 Payment Options
+
 
 Billing Completed on 26/12/2026
