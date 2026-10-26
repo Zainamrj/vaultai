@@ -12,12 +12,12 @@ Insurance Member ID: GFD-6341-6351
 Registration Date: 09/08/2026
 
 
-Referrring Physician: 
+Referring Physician: 
 Dr. Fuori Rosso
 
 Complaints
 The patient reports about 3 weeks of persistent fatigue, increased thirst and
-frequent urination. He also reports occasional headaches in the evening. He
+frequent urination. She also reports occasional headaches in the evening. She
 denies chest pain and shortness of breath.
 
 
@@ -31,7 +31,7 @@ Temperature: 36.7 C
 
 
 Allergies
-No known drug Allergies
+Penicillin (skin rash)
 
 
 Current Medications
