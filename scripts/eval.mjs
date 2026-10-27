@@ -26,7 +26,12 @@ const cost = (model, u) => {
   const c = (u.prompt_tokens * p[0] + u.completion_tokens * p[1]) / 1e6; totalCost += c; return c;
 };
 const cosine = (a, b) => { let d = 0, x = 0, y = 0; for (let i = 0; i < a.length; i++) { d += a[i] * b[i]; x += a[i] ** 2; y += b[i] ** 2; } return d / (Math.sqrt(x) * Math.sqrt(y)); };
-const norm = (s) => s.toLowerCase().replace(/,/g, "");
+const norm = (s) =>
+  s.toLowerCase()
+    .replace(/[\u00a0\u2007\u2009\u202f]/g, " ")   // non-breaking / thin spaces
+    .replace(/[\u2010-\u2015\u2212]/g, "-")         // fancy hyphens and dashes
+    .replace(/,/g, "")
+    .replace(/\s+/g, " ");
 
 // Keep these two prompts identical to app/api/chat/route.ts and app/api/judge/route.ts
 const SYSTEM = `You are a careful enterprise document analyst. Answer ONLY using the numbered context.
@@ -65,10 +70,14 @@ const rows = [];
 for (const q of questions) {
   const t0 = Date.now();
   const safeQ = redact(q.question).redactedText;
+  const tA = Date.now();
   const qv = (await client.embeddings.create({ model: M.embed, input: [safeQ], dimensions: DIMS })).data[0].embedding;
   const top = chunks.map((c) => ({ c, s: cosine(qv, c.vector) })).sort((a, b) => b.s - a.s).slice(0, TOP_K);
   const context = top.map((x, i) => `[${i + 1}] ${x.c.text}`).join("\n\n");
   const retrievalOk = q.doc === "all" ? true : top.some((x) => x.c.file === q.doc);
+  const top1Ok = q.doc === "all" ? true : top[0].c.file === q.doc;
+  const embedMs = Date.now() - tA;
+  const tB = Date.now();
 
   const a = await client.chat.completions.create({
     model: M.main, temperature: 0.1, max_tokens: 1500,
@@ -76,25 +85,32 @@ for (const q of questions) {
   });
   const answer = (a.choices[0].message.content ?? "").trim();
   cost(M.main, a.usage);
+  const answerMs = Date.now() - tB;
+  const outTokens = a.usage?.completion_tokens ?? 0;
+  const tC = Date.now();
 
   const j = await client.chat.completions.create({
     model: judgeModel, temperature: 0, max_tokens: 2000,
     messages: [{ role: "system", content: JUDGE }, { role: "user", content: `QUESTION: ${safeQ}\n\nANSWER: ${answer}\n\nSOURCES:\n${context}` }],
   });
   cost(judgeModel, j.usage);
+  const judgeMs = Date.now() - tC;
   let verdict = "invalid-json", score = "-";
+  const rawJudge = j.choices[0].message.content ?? "";
   try {
-    const raw = j.choices[0].message.content ?? "";
+    const raw = rawJudge;
     const js = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
     verdict = js.verdict; score = js.score;
-  } catch { /* keep invalid-json */ }
+  } catch {
+    console.log(`      judge output could not be parsed (finish_reason: ${j.choices[0].finish_reason}, ${j.usage?.completion_tokens} tokens): ${rawJudge.replace(/\s+/g, " ").slice(0, 300) || "(empty)"}`);
+  }
 
   const ans = norm(answer);
   const missingStrings = (q.mustContain ?? []).filter((s) => !ans.includes(norm(s)));
   const forbidden = (q.mustNotContain ?? []).filter((s) => ans.includes(norm(s)));
   const pass = answer.length > 0 && missingStrings.length === 0 && forbidden.length === 0;
-  rows.push({ id: q.id, type: q.type, question: q.question, answer, pass, missingStrings, forbidden, retrievalOk, verdict, score, ms: Date.now() - t0 });
-  console.log(`${pass ? "PASS" : "FAIL"}  ${q.id} (${q.type})  retrieval:${retrievalOk ? "ok" : "MISS"}  judge:${verdict}/${score}  ${Date.now() - t0} ms`);
+  rows.push({ id: q.id, type: q.type, question: q.question, answer, pass, missingStrings, forbidden, retrievalOk, top1Ok, verdict, score, embedMs, answerMs, judgeMs, outTokens, ms: Date.now() - t0 });
+  console.log(`${pass ? "PASS" : "FAIL"}  ${q.id} (${q.type})  top1:${top1Ok ? "ok" : "MISS"} top${TOP_K}:${retrievalOk ? "ok" : "MISS"}  judge:${verdict}/${score}  | embed ${embedMs} ms, answer ${answerMs} ms (${outTokens} out tokens), judge ${judgeMs} ms`);
   if (!pass) console.log(`      answer: ${answer.replace(/\s+/g, " ").slice(0, 200)}\n      missing: ${JSON.stringify(missingStrings)}  forbidden found: ${JSON.stringify(forbidden)}`);
 }
 
@@ -102,18 +118,23 @@ for (const q of questions) {
 const passed = rows.filter((r) => r.pass).length;
 const byType = {};
 for (const r of rows) { (byType[r.type] ??= { n: 0, ok: 0 }).n++; if (r.pass) byType[r.type].ok++; }
-const avgMs = Math.round(rows.reduce((s, r) => s + r.ms, 0) / rows.length);
+const avg = (k) => Math.round(rows.reduce((s, r) => s + r[k], 0) / rows.length);
+const avgMs = avg("ms");
+const answerable = rows.filter((r) => r.type === "answerable");
+const top1 = answerable.filter((r) => r.top1Ok).length;
+const inTopK = answerable.filter((r) => r.retrievalOk).length;
 const esc = (s) => String(s).replace(/\|/g, "\\|").replace(/\s+/g, " ");
 const md = [
   `# Evaluation results`, ``,
   `Run: ${new Date().toISOString().slice(0, 10)} | Answer model: \`${M.main}\` | Judge: \`${judgeModel}\` | Embeddings: \`${M.embed}\` (${DIMS} dims) | Top-k: ${TOP_K}`, ``,
-  `**${passed}/${rows.length} questions passed.** Average time per question (retrieve + answer + judge): ${avgMs} ms. Estimated cost of the whole run: about $${totalCost.toFixed(4)}.`, ``,
+  `**${passed}/${rows.length} questions passed.** Retrieval on answerable questions: right document first for ${top1}/${answerable.length}, within the top ${TOP_K} for ${inTopK}/${answerable.length}. Estimated cost of the whole run: about $${totalCost.toFixed(4)}.`, ``,
+  `Average time per question: ${avgMs} ms in total (embed ${avg("embedMs")} ms, answer ${avg("answerMs")} ms, judge ${avg("judgeMs")} ms).`, ``,
   `| Type | Passed |`, `|---|---|`,
   ...Object.entries(byType).map(([t, v]) => `| ${t} | ${v.ok}/${v.n} |`), ``,
-  `| ID | Type | Result | Right document retrieved | Judge | Time (ms) | Answer |`, `|---|---|---|---|---|---|---|`,
-  ...rows.map((r) => `| ${r.id} | ${r.type} | ${r.pass ? "pass" : "FAIL"} | ${r.retrievalOk ? "yes" : "no"} | ${r.verdict} (${r.score}) | ${r.ms} | ${esc(r.answer).slice(0, 140)} |`), ``,
+  `| ID | Type | Result | Top-1 doc | In top-${TOP_K} | Judge | Answer (ms) | Judge (ms) | Answer |`, `|---|---|---|---|---|---|---|---|---|`,
+  ...rows.map((r) => `| ${r.id} | ${r.type} | ${r.pass ? "pass" : "FAIL"} | ${r.top1Ok ? "yes" : "no"} | ${r.retrievalOk ? "yes" : "no"} | ${r.verdict} (${r.score}) | ${r.answerMs} | ${r.judgeMs} | ${esc(r.answer).slice(0, 140)} |`), ``,
   `Checks: every \`mustContain\` string must appear in the answer; no \`mustNotContain\` string may appear. Documents and questions are synthetic.`, ``,
 ].join("\n");
 writeFileSync(new URL("../docs/eval/results.md", import.meta.url), md);
-console.log(`\n${passed}/${rows.length} passed. Avg ${avgMs} ms/question. Estimated cost ~$${totalCost.toFixed(4)}. Wrote docs/eval/results.md`);
+console.log(`\n${passed}/${rows.length} passed. Retrieval (answerable only): top-1 ${top1}/${answerable.length}, top-${TOP_K} ${inTopK}/${answerable.length}. Avg per question: ${avgMs} ms (embed ${avg("embedMs")}, answer ${avg("answerMs")}, judge ${avg("judgeMs")}). Estimated cost ~$${totalCost.toFixed(4)}. Wrote docs/eval/results.md`);
 process.exit(passed === rows.length ? 0 : 1);

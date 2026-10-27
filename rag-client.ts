@@ -3,7 +3,7 @@
 import { redact } from "./redact";
 import type { Chunk, JudgeResponse, Wire } from "@/types";
 
-export type StoredChunk = Chunk & { vector: number[]; docName?: string };
+export type StoredChunk = Chunk & { vector?: number[]; docName?: string };
 
 export type AnswerResult = {
   text: string;        // full answer, trimmed
@@ -30,7 +30,8 @@ export function cosine(a: number[], b: number[]): number {
 
 export function topK(queryVec: number[], store: StoredChunk[], k = 4): { chunk: StoredChunk; score: number }[] {
   return store
-    .map((chunk) => ({ chunk, score: cosine(queryVec, chunk.vector) }))
+    .filter((c) => c.vector)
+    .map((chunk) => ({ chunk, score: cosine(queryVec, chunk.vector!) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, k);
 }
@@ -70,12 +71,76 @@ export async function embedChunks(chunks: Chunk[], docName?: string): Promise<{ 
   return { stored: chunks.map((c, i) => ({ ...c, vector: vectors[i], docName })), wires };
 }
 
-/** Finds the k most relevant chunks. The question is redacted before it is embedded. */
-export async function retrieve(question: string, store: StoredChunk[], k = 4) {
-  if (store.length === 0) return { question: redactQuestion(question), hits: [], wire: undefined as Wire | undefined };
+// ---------- keyword ranking (BM25): instant, no network ----------
+const STOP = new Set("a an and are as at be by for from has have how in is it of on or that the this to was were what when which who whom with did does do".split(" "));
+const tokenize = (t: string) => (t.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 1 && !STOP.has(w));
+
+export function bm25Rank(query: string, store: StoredChunk[]): { chunk: StoredChunk; score: number }[] {
+  const docs = store.map((c) => tokenize(c.text));
+  const avgLen = docs.reduce((s, d) => s + d.length, 0) / Math.max(1, docs.length);
+  const df = new Map<string, number>();
+  for (const d of docs) for (const w of new Set(d)) df.set(w, (df.get(w) ?? 0) + 1);
+  const q = [...new Set(tokenize(query))];
+  const k1 = 1.5, b = 0.75;
+  return store
+    .map((chunk, i) => {
+      const d = docs[i];
+      const tf = new Map<string, number>();
+      for (const w of d) tf.set(w, (tf.get(w) ?? 0) + 1);
+      let score = 0;
+      for (const w of q) {
+        const f = tf.get(w) ?? 0;
+        if (!f) continue;
+        const idf = Math.log(1 + (docs.length - (df.get(w) ?? 0) + 0.5) / ((df.get(w) ?? 0) + 0.5));
+        score += (idf * f * (k1 + 1)) / (f + k1 * (1 - b + (b * d.length) / (avgLen || 1)));
+      }
+      return { chunk, score };
+    })
+    .sort((x, y) => y.score - x.score);
+}
+
+export type RetrieveMode = "all" | "hybrid" | "keyword-fallback" | "keyword";
+
+/**
+ * Finds the most relevant chunks. The question is redacted first.
+ * The embedding endpoint can take anywhere from 0.5 s to 13 s, so we never wait on it for long:
+ *  - small collections (<= allBelow chunks): no embedding call at all, every chunk is sent, best first.
+ *  - larger collections: vector search fused with keyword search; if the embedding does not
+ *    arrive within timeoutMs, we use the keyword ranking alone.
+ */
+export async function retrieve(
+  question: string,
+  store: StoredChunk[],
+  k = 4,
+  opts: { allBelow?: number; timeoutMs?: number } = {},
+): Promise<{ question: string; hits: { chunk: StoredChunk; score: number }[]; wire?: Wire; mode: RetrieveMode }> {
+  const { allBelow = 6, timeoutMs = 3000 } = opts;
   const safe = redactQuestion(question);
-  const { vectors, wires } = await embedTexts([safe]);
-  return { question: safe, hits: topK(vectors[0], store, k), wire: wires[0] };
+  if (store.length === 0) return { question: safe, hits: [], mode: "all" };
+
+  const lexical = bm25Rank(safe, store);
+  if (store.length <= allBelow) return { question: safe, hits: lexical, mode: "all" };
+
+  const vectorsReady = store.filter((c) => c.vector).length >= store.length / 2;
+  if (!vectorsReady) return { question: safe, hits: lexical.slice(0, k), mode: "keyword" };
+
+  const timeout = new Promise<null>((res) => setTimeout(() => res(null), timeoutMs));
+  const emb = embedTexts([safe]).catch(() => null);
+  const got = await Promise.race([emb, timeout]);
+  if (!got) return { question: safe, hits: lexical.slice(0, k), mode: "keyword-fallback" };
+
+  // reciprocal rank fusion of the vector ranking and the keyword ranking
+  const vec = topK(got.vectors[0], store, store.length);
+  const fused = new Map<string, number>();
+  const add = (list: { chunk: StoredChunk }[]) => list.forEach((x, i) => fused.set(x.chunk.id, (fused.get(x.chunk.id) ?? 0) + 1 / (60 + i)));
+  add(vec);
+  add(lexical);
+  const byId = new Map(store.map((c) => [c.id, c]));
+  const hits = [...fused.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, k)
+    .map(([id, score]) => ({ chunk: byId.get(id)!, score }));
+  return { question: safe, hits, wire: got.wires[0], mode: "hybrid" };
 }
 
 /** Streams the answer. onToken is called with each piece of text as it arrives. */
