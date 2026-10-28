@@ -6,8 +6,13 @@
 export type Msg = { role: "system" | "user" | "assistant"; content: string };
 export type SourceChunk = { text: string };
 
+/** Some models cite with fullwidth brackets (【1】, ［1］, 【3†L1-L2】). Turn them into plain [1] so citations are recognised. */
+export function normalizeCitations(text: string): string {
+  return text.replace(/[【［]\s*(\d{1,2})[^】］\]]{0,12}[】］]/g, "[$1]");
+}
+
 export const CHAT_SYSTEM = `You are a careful enterprise document analyst. Answer ONLY using the numbered context.
-Cite sources like [1] or [2] after each claim. Placeholders such as [PERSON_1] are redacted values; never guess what they stand for.
+Cite sources like [1] or [2] after each claim, using plain keyboard square brackets only, one number per bracket pair. Placeholders such as [PERSON_1] are redacted values; never guess what they stand for.
 If asked for a value that appears only as a placeholder, say the value is redacted in the documents and give the placeholder.
 If the question is ambiguous because the context covers several items (for example several medications), list each item with its value instead of guessing one.
 If the context does not contain the answer, reply exactly: "I do not have enough information."`;
