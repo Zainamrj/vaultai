@@ -23,7 +23,17 @@
 - Scanned (image-only) PDFs are not supported.
 
 ## Bugs / lessons
-- (add as you go)
+- Oct 28: Next.js only serves a file named `page.tsx`. A rename to `page-2.tsx` left the build with no `/` route (the route table listed only the API routes). Check the `next build` route table after any move of page files.
+- Oct 28: a second copy of `redact.ts` at the repo root was not imported by anything, so the app ran an older `lib/redact.ts` that leaked a spaced IBAN and the Insurance Member ID. Keep one copy, and `npm test` now fails if a known synthetic identifier survives redaction.
+- Oct 28: the eval prompts had drifted from the app's prompts, so the eval numbers did not describe the app. All prompts now live in `lib/prompts.ts`.
+- Oct 28: text extracted from PDFs has single newlines and no blank lines, so the paragraph-only chunker returned the whole document as one chunk. Oversized paragraphs are now split again.
+- Oct 28: loading `.ts` files from plain Node scripts needs Node 22.18 or newer. `next/font/google` fetches fonts at build time, so a build on a restricted network fails unless fonts are self-hosted (relevant if we containerise the app).
 
 ## Draft feedback for Nebius / NVIDIA
-- (add as you go)
+- Draft, confirm each point against what you saw before submitting.
+- Embeddings: Qwen3-Embedding-8B was the only embedding model listed, and it is not an NVIDIA model. An NVIDIA embedding model on Token Factory would make an all-NVIDIA pipeline possible.
+- Embedding latency: one short text took 0.5 s to 13.5 s, and 4 parallel calls took about 20 s, which was the slowest step of the whole pipeline. We added keyword search and a timeout fallback so the UI never waits on it.
+- Reasoning models: Nemotron streams a separate `reasoning` field next to `content`, and reasoning tokens count toward `max_tokens`, so small limits return empty answers. This was not obvious from the first test. A documented example or a parameter to cap reasoning would help.
+- Model IDs differ in case and format (for example `NVIDIA-Nemotron-3-Nano` and `nemotron-3-super`), so we keep them in env vars and list them live.
+- Worked well: the OpenAI-compatible API (only `baseURL` changed), the embedding `dimensions` parameter, and the price per call (a full retrieve, answer and judge pass cost well under a cent).
+- JSON from the judge: the model sometimes wraps JSON in code fences or adds reasoning text, so we validate with zod and extract from the first `{` to the last `}`.

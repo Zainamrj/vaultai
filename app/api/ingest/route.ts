@@ -2,6 +2,7 @@ import { extractText, getDocumentProxy } from "unpdf";
 import { redact } from "@/lib/redact";
 import { chunk } from "@/lib/chunk";
 export const maxDuration = 60;
+const MAX_BYTES = 4 * 1024 * 1024;
 
 // Accepts multipart form-data with a "file" field (.txt or .pdf),
 // or JSON: { text, name } (used by "Load sample document").
@@ -20,6 +21,8 @@ export async function POST(req: Request) {
       const form = await req.formData();
       const file = form.get("file");
       if (!(file instanceof File)) return Response.json({ error: "No file uploaded" }, { status: 400 });
+      // The browser checks this too; enforce it here so the limit cannot be bypassed.
+      if (file.size > MAX_BYTES) return Response.json({ error: "This file is larger than 4 MB." }, { status: 413 });
       name = file.name;
       const buf = new Uint8Array(await file.arrayBuffer());
       if (name.toLowerCase().endsWith(".pdf")) {

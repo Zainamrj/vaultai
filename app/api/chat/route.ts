@@ -1,17 +1,20 @@
+import { z } from "zod";
 import { chatStream, MODELS, MOCK } from "@/lib/ai";
+import { chatMessages } from "@/lib/prompts";
 export const maxDuration = 60;
 
-const SYSTEM = `You are a careful enterprise document analyst. Answer ONLY using the numbered context.
-Cite sources like [1] or [2] after each claim. Placeholders such as [PERSON_1] are redacted values; never guess what they stand for.
-If the context does not contain the answer, reply exactly: "I do not have enough information."`;
+const Body = z.object({
+  question: z.string().min(1).max(2000),
+  chunks: z.array(z.object({ text: z.string().max(6000) })).min(1).max(8),
+});
 
 export async function POST(req: Request) {
-  const { question, chunks } = await req.json();
-  const context = chunks.map((c: { text: string }, i: number) => `[${i + 1}] ${c.text}`).join("\n\n");
-  const messages = [
-    { role: "system" as const, content: SYSTEM },
-    { role: "user" as const, content: `CONTEXT:\n${context}\n\nQUESTION: ${question}` },
-  ];
+  const parsed = Body.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return Response.json({ error: "Invalid request." }, { status: 400 });
+  const { question, chunks } = parsed.data;
+
+  // Same builder the browser uses for the Wire Inspector, so the inspector shows exactly this.
+  const messages = chatMessages(question, chunks);
   const enc = new TextEncoder();
   const body = new ReadableStream({
     async start(controller) {

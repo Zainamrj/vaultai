@@ -1,7 +1,8 @@
 // Browser-side RAG helpers: embed chunks, retrieve, stream an answer, judge it.
 // Everything here talks to our own /api routes. Raw questions are redacted first.
 import { redact } from "./redact";
-import type { Chunk, JudgeResponse, Wire } from "@/types";
+import { chatMessages } from "./prompts";
+import type { Chunk, JudgeResponse, RewriteResponse, Wire } from "@/types";
 
 export type StoredChunk = Chunk & { vector?: number[]; docName?: string };
 
@@ -99,6 +100,27 @@ export function bm25Rank(query: string, store: StoredChunk[]): { chunk: StoredCh
     .sort((x, y) => y.score - x.score);
 }
 
+/** Nemotron Nano query cleanup. Resolves to null on any failure or timeout, so retrieval never waits on it. */
+export async function rewriteQuery(safeQuestion: string, timeoutMs = 2500): Promise<RewriteResponse | null> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const res = await fetch("/api/rewrite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: safeQuestion }),
+      signal: ctl.signal,
+    });
+    if (!res.ok) return null;
+    const r = (await res.json()) as RewriteResponse;
+    return typeof r.query === "string" && r.query.trim() ? r : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export type RetrieveMode = "all" | "hybrid" | "keyword-fallback" | "keyword";
 
 /**
@@ -112,9 +134,16 @@ export async function retrieve(
   question: string,
   store: StoredChunk[],
   k = 4,
-  opts: { allBelow?: number; timeoutMs?: number } = {},
-): Promise<{ question: string; hits: { chunk: StoredChunk; score: number }[]; wire?: Wire; mode: RetrieveMode }> {
-  const { allBelow = 6, timeoutMs = 3000 } = opts;
+  opts: { allBelow?: number; timeoutMs?: number; rewrite?: boolean } = {},
+): Promise<{
+  question: string;
+  hits: { chunk: StoredChunk; score: number }[];
+  wire?: Wire;
+  /** Nemotron Nano query cleanup, when it ran in time. Show its wire in the Wire Inspector. */
+  rewrite?: RewriteResponse;
+  mode: RetrieveMode;
+}> {
+  const { allBelow = 6, timeoutMs = 3000, rewrite = true } = opts;
   const safe = redactQuestion(question);
   if (store.length === 0) return { question: safe, hits: [], mode: "all" };
 
@@ -126,21 +155,29 @@ export async function retrieve(
 
   const timeout = new Promise<null>((res) => setTimeout(() => res(null), timeoutMs));
   const emb = embedTexts([safe]).catch(() => null);
-  const got = await Promise.race([emb, timeout]);
-  if (!got) return { question: safe, hits: lexical.slice(0, k), mode: "keyword-fallback" };
+  // The Nano rewrite runs in parallel with the embedding call, so it adds no waiting of its own.
+  const [got, rw] = await Promise.all([
+    Promise.race([emb, timeout]),
+    rewrite ? rewriteQuery(safe) : Promise.resolve(null),
+  ]);
+  const lexicalRw = rw && rw.query !== safe ? bm25Rank(rw.query, store) : null;
+  if (!got) {
+    return { question: safe, hits: (lexicalRw ?? lexical).slice(0, k), rewrite: rw ?? undefined, mode: "keyword-fallback" };
+  }
 
-  // reciprocal rank fusion of the vector ranking and the keyword ranking
+  // reciprocal rank fusion of the vector ranking and the keyword ranking(s)
   const vec = topK(got.vectors[0], store, store.length);
   const fused = new Map<string, number>();
   const add = (list: { chunk: StoredChunk }[]) => list.forEach((x, i) => fused.set(x.chunk.id, (fused.get(x.chunk.id) ?? 0) + 1 / (60 + i)));
   add(vec);
   add(lexical);
+  if (lexicalRw) add(lexicalRw);
   const byId = new Map(store.map((c) => [c.id, c]));
   const hits = [...fused.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, k)
     .map(([id, score]) => ({ chunk: byId.get(id)!, score }));
-  return { question: safe, hits, wire: got.wires[0], mode: "hybrid" };
+  return { question: safe, hits, wire: got.wires[0], rewrite: rw ?? undefined, mode: "hybrid" };
 }
 
 /** Streams the answer. onToken is called with each piece of text as it arrives. */
@@ -182,17 +219,25 @@ export async function streamAnswer(
     citations: parseCitations(text),
     wire: {
       model: res.headers.get("X-Wire-Model") ?? "unknown",
-      payload: { question: safe, context: chunks.map((c) => c.text) }, // exactly what the server forwards to the model
+      payload: { messages: chatMessages(safe, chunks) }, // the exact messages array the server sends to the model
       latencyMs: Date.now() - t0,
     },
   };
 }
 
 /** Asks Nemotron Ultra to check the answer against the same chunks. */
-export function judgeAnswer(question: string, answer: string, chunks: { text: string }[]): Promise<JudgeResponse> {
+export function judgeAnswer(
+  question: string,
+  answer: string,
+  chunks: { text: string }[],
+  opts: { regenerate?: boolean } = {},
+): Promise<JudgeResponse> {
   return postJson<JudgeResponse>("/api/judge", {
     question: redactQuestion(question),
     answer,
     chunks: chunks.map((c) => ({ text: c.text })),
+    // With regenerate: true a low score (< 3) triggers one strict regeneration. If the response has
+    // revisedAnswer, the UI MUST show it instead of the original text, because the verdict is for it.
+    ...(opts.regenerate ? { regenerate: true } : {}),
   });
 }

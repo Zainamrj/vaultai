@@ -1,0 +1,20 @@
+[
+  {
+    "id": "p1",
+    "questionId": "q1",
+    "wrongAnswer": "The total amount charged for the visit before insurance was £659.00 [1].",
+    "note": "Digits transposed: the billing statement says £569.00."
+  },
+  {
+    "id": "p2",
+    "questionId": "q4",
+    "wrongAnswer": "The new metformin dose is 500 mg once daily [1].",
+    "note": "The visit summary says 1000 mg twice daily."
+  },
+  {
+    "id": "p3",
+    "questionId": "q7",
+    "wrongAnswer": "The patient has a documented allergy to sulfa drugs [1].",
+    "note": "The intake form says penicillin; sulfa drugs are not mentioned."
+  }
+]

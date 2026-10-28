@@ -17,6 +17,8 @@ const PATTERNS: { type: string; re: RegExp }[] = [
   { type: "SSN", re: /\b\d{3}-\d{2}-\d{4}\b/g },
   { type: "EMAIL", re: /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g },
   { type: "IBAN", re: /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/g },
+  // IBAN written in groups of four: DE89 3704 0044 0532 0130 00
+  { type: "IBAN", re: /\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}(?:[ ]?[A-Z0-9]{1,4})?\b/g },
   { type: "CARD", re: /\b(?:\d[ -]?){13,16}\b/g },
   // international numbers: +966 50 123 4567, +1 555 123 4567
   { type: "PHONE", re: /\+\d{1,3}(?:[\s.-]?\d{1,4}){2,5}\b/g },
@@ -29,6 +31,11 @@ const PATTERNS: { type: string; re: RegExp }[] = [
   { type: "DATE", re: new RegExp(String.raw`\b\d{1,2}(?:st|nd|rd|th)?[ \t]+${MONTH},?[ \t]+\d{4}\b`, "g") },
   // labelled identifiers
   { type: "ACCOUNT", re: /(?<=\b(?:Account|Acct)(?:[ \t]*(?:No\.?|Number|#))?[ \t]*:?[ \t]*)\d{6,12}\b/gi },
+  // other labelled IDs: Insurance Member ID, Loan Reference No, Employee ID, Policy Number ...
+  {
+    type: "ID",
+    re: /(?<=\b(?:Member|Policy|Insurance|Employee|Badge|License|Licence|Loan|Case|Claim|Reference|Customer|Passport|National)[ \t]*(?:ID|No\.?|Number|#)[ \t]*:?[ \t]*)(?=\S)(?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{4,}/gi,
+  },
   { type: "MRN", re: /(?<=\bMRN[ \t]*:?[ \t]*)[A-Z0-9-]{5,12}\b/g },
   // addresses: whole line after a label, or a street-style address
   { type: "ADDRESS", re: /(?<=\b(?:Address|Residence|Home address|Location)[ \t]*:[ \t]*)(?=\S)[^\r\n]+/gi },

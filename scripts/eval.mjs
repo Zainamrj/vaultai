@@ -1,13 +1,18 @@
 // VaultAI evaluation: runs docs/eval/questions.json through the whole pipeline with the REAL models
 // (redact -> chunk -> embed -> retrieve -> answer with Super -> judge) and writes docs/eval/results.md.
 // Run:   node --env-file=.env.local scripts/eval.mjs
-// Cheap: $env:JUDGE_MODEL="fast"; node --env-file=.env.local scripts/eval.mjs     (judge = Nano)
+// Cheap: JUDGE_MODEL=fast node --env-file=.env.local scripts/eval.mjs     (judge = Nano)
+// Standalone: no Next.js imports, driven by env vars, so it also runs as a container / Nebius Serverless Job.
+//   EVAL_OUT=<path>   where to write the results table (default docs/eval/results.md)
+// Needs Node 22.18+ (it loads the TypeScript files in lib/ directly).
 // Rules: every string in mustContain must appear (case-insensitive, commas ignored);
 //        no string in mustNotContain may appear.
 import OpenAI from "openai";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { redact } from "../lib/redact.ts";
 import { chunk } from "../lib/chunk.ts";
+import { chatMessages, judgeMessages, extractJson } from "../lib/prompts.ts";
+import { fileURLToPath } from "node:url";
 
 const need = ["NEBIUS_API_KEY", "NEBIUS_BASE_URL", "MODEL_FAST", "MODEL_MAIN", "MODEL_JUDGE", "MODEL_EMBED"];
 const missing = need.filter((k) => !process.env[k]);
@@ -33,20 +38,7 @@ const norm = (s) =>
     .replace(/,/g, "")
     .replace(/\s+/g, " ");
 
-// Keep these two prompts identical to app/api/chat/route.ts and app/api/judge/route.ts
-const SYSTEM = `You are a careful enterprise document analyst. Answer ONLY using the numbered context.
-Cite sources like [1] or [2] after each claim. Placeholders such as [PERSON_1] are redacted values; never guess what they stand for.
-If asked for a value that appears only as a placeholder, say the value is redacted in the documents and give the placeholder.
-If the context does not contain the answer, reply exactly: "I do not have enough information."`;
-const JUDGE = `You are a strict fact-checker. You receive a QUESTION, an ANSWER, and numbered SOURCES.
-Rules:
-1. Split the ANSWER into atomic claims. Citation markers like [1] are not claims.
-2. For each claim decide whether it is directly supported by a source. Give the source number.
-3. Placeholders such as [PERSON_1] or [SSN_1] are redacted values. A claim that only states a placeholder is supported if the source contains that placeholder in the right context. If the answer guesses the real value behind a placeholder, mark that claim unsupported.
-4. If the ANSWER says the information is not available (for example "I do not have enough information"), return an empty claims list. Set verdict "verified" and score 5 if none of the SOURCES contain the information needed to answer the QUESTION. Set verdict "unverified" and score 1 if the SOURCES do contain it.
-5. Score overall grounding from 1 to 5 (5 = every claim supported). Never use 0.
-6. Return ONLY valid JSON, no prose, no code fences, in this shape:
-{"claims":[{"text":"...","supported":true,"sourceChunkId":"1","note":"..."}],"score":4,"verdict":"verified|partial|unverified"}`;
+// Prompts come from lib/prompts.ts, the same module the API routes use, so the eval measures the real app.
 
 // ---------- load, redact, chunk, embed ----------
 const dir = new URL("../docs/test-data/", import.meta.url);
@@ -66,14 +58,36 @@ chunks.forEach((c, i) => (c.vector = emb.data[i].embedding));
 console.log(`Loaded ${files.length} documents, ${chunks.length} chunks. Answer model: ${M.main}. Judge model: ${judgeModel}\n`);
 
 // ---------- run questions ----------
+const flagged = (v, sc) => v !== "verified" || (typeof sc === "number" && sc <= 3);
+
+/** One judge call with the shared prompt. Returns the parsed verdict plus timing. */
+async function runJudge(safeQ, answer, top) {
+  const t = Date.now();
+  const j = await client.chat.completions.create({
+    model: judgeModel, temperature: 0, max_tokens: 2000,
+    messages: judgeMessages(safeQ, answer, top.map((x) => ({ text: x.c.text }))),
+  });
+  cost(judgeModel, j.usage);
+  const ms = Date.now() - t;
+  const raw = j.choices[0].message.content ?? "";
+  try {
+    const js = extractJson(raw);
+    return { verdict: js.verdict, score: js.score, claims: js.claims ?? [], ms };
+  } catch {
+    console.log(`      judge output could not be parsed (finish_reason: ${j.choices[0].finish_reason}, ${j.usage?.completion_tokens} tokens): ${raw.replace(/\s+/g, " ").slice(0, 300) || "(empty)"}`);
+    return { verdict: "invalid-json", score: "-", claims: [], ms };
+  }
+}
+
 const rows = [];
+const topByQuestion = new Map();
 for (const q of questions) {
   const t0 = Date.now();
   const safeQ = redact(q.question).redactedText;
   const tA = Date.now();
   const qv = (await client.embeddings.create({ model: M.embed, input: [safeQ], dimensions: DIMS })).data[0].embedding;
   const top = chunks.map((c) => ({ c, s: cosine(qv, c.vector) })).sort((a, b) => b.s - a.s).slice(0, TOP_K);
-  const context = top.map((x, i) => `[${i + 1}] ${x.c.text}`).join("\n\n");
+  topByQuestion.set(q.id, { safeQ, top });
   const retrievalOk = q.doc === "all" ? true : top.some((x) => x.c.file === q.doc);
   const top1Ok = q.doc === "all" ? true : top[0].c.file === q.doc;
   const embedMs = Date.now() - tA;
@@ -81,29 +95,14 @@ for (const q of questions) {
 
   const a = await client.chat.completions.create({
     model: M.main, temperature: 0.1, max_tokens: 1500,
-    messages: [{ role: "system", content: SYSTEM }, { role: "user", content: `CONTEXT:\n${context}\n\nQUESTION: ${safeQ}` }],
+    messages: chatMessages(safeQ, top.map((x) => ({ text: x.c.text }))),
   });
   const answer = (a.choices[0].message.content ?? "").trim();
   cost(M.main, a.usage);
   const answerMs = Date.now() - tB;
   const outTokens = a.usage?.completion_tokens ?? 0;
-  const tC = Date.now();
 
-  const j = await client.chat.completions.create({
-    model: judgeModel, temperature: 0, max_tokens: 2000,
-    messages: [{ role: "system", content: JUDGE }, { role: "user", content: `QUESTION: ${safeQ}\n\nANSWER: ${answer}\n\nSOURCES:\n${context}` }],
-  });
-  cost(judgeModel, j.usage);
-  const judgeMs = Date.now() - tC;
-  let verdict = "invalid-json", score = "-";
-  const rawJudge = j.choices[0].message.content ?? "";
-  try {
-    const raw = rawJudge;
-    const js = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
-    verdict = js.verdict; score = js.score;
-  } catch {
-    console.log(`      judge output could not be parsed (finish_reason: ${j.choices[0].finish_reason}, ${j.usage?.completion_tokens} tokens): ${rawJudge.replace(/\s+/g, " ").slice(0, 300) || "(empty)"}`);
-  }
+  const { verdict, score, ms: judgeMs } = await runJudge(safeQ, answer, top);
 
   const ans = norm(answer);
   const missingStrings = (q.mustContain ?? []).filter((s) => !ans.includes(norm(s)));
@@ -112,6 +111,20 @@ for (const q of questions) {
   rows.push({ id: q.id, type: q.type, question: q.question, answer, pass, missingStrings, forbidden, retrievalOk, top1Ok, verdict, score, embedMs, answerMs, judgeMs, outTokens, ms: Date.now() - t0 });
   console.log(`${pass ? "PASS" : "FAIL"}  ${q.id} (${q.type})  top1:${top1Ok ? "ok" : "MISS"} top${TOP_K}:${retrievalOk ? "ok" : "MISS"}  judge:${verdict}/${score}  | embed ${embedMs} ms, answer ${answerMs} ms (${outTokens} out tokens), judge ${judgeMs} ms`);
   if (!pass) console.log(`      answer: ${answer.replace(/\s+/g, " ").slice(0, 200)}\n      missing: ${JSON.stringify(missingStrings)}  forbidden found: ${JSON.stringify(forbidden)}`);
+}
+
+// ---------- judge check: deliberately wrong answers must be flagged ----------
+// docs/eval/planted-wrong.json holds answers that contradict the documents. The judge should NOT call them verified.
+const planted = [];
+let plantedList = [];
+try { plantedList = JSON.parse(readFileSync(new URL("../docs/eval/planted-wrong.json", import.meta.url), "utf8")); } catch { console.warn("No docs/eval/planted-wrong.json: skipping the planted-wrong judge check."); }
+for (const p of plantedList) {
+  const ctx = topByQuestion.get(p.questionId);
+  if (!ctx) { console.warn(`planted ${p.id}: unknown questionId ${p.questionId}, skipped`); continue; }
+  const r = await runJudge(ctx.safeQ, p.wrongAnswer, ctx.top);
+  const ok = flagged(r.verdict, r.score);
+  planted.push({ id: p.id, questionId: p.questionId, answer: p.wrongAnswer, verdict: r.verdict, score: r.score, unsupported: r.claims.filter((c) => c.supported === false).length, ok, ms: r.ms });
+  console.log(`${ok ? "FLAGGED " : "MISSED  "} ${p.id} (planted wrong answer to ${p.questionId})  judge:${r.verdict}/${r.score}  | judge ${r.ms} ms`);
 }
 
 // ---------- summary + results.md ----------
@@ -123,18 +136,34 @@ const avgMs = avg("ms");
 const answerable = rows.filter((r) => r.type === "answerable");
 const top1 = answerable.filter((r) => r.top1Ok).length;
 const inTopK = answerable.filter((r) => r.retrievalOk).length;
+// correct answers the judge should accept: answerable questions that passed the string checks
+const goodAnswers = rows.filter((r) => r.type === "answerable" && r.pass);
+const goodVerified = goodAnswers.filter((r) => r.verdict === "verified").length;
+const plantedFlagged = planted.filter((p) => p.ok).length;
 const esc = (s) => String(s).replace(/\|/g, "\\|").replace(/\s+/g, " ");
 const md = [
   `# Evaluation results`, ``,
   `Run: ${new Date().toISOString().slice(0, 10)} | Answer model: \`${M.main}\` | Judge: \`${judgeModel}\` | Embeddings: \`${M.embed}\` (${DIMS} dims) | Top-k: ${TOP_K}`, ``,
   `**${passed}/${rows.length} questions passed.** Retrieval on answerable questions: right document first for ${top1}/${answerable.length}, within the top ${TOP_K} for ${inTopK}/${answerable.length}. Estimated cost of the whole run: about $${totalCost.toFixed(4)}.`, ``,
+  ...(planted.length
+    ? [`**Judge check:** ${plantedFlagged}/${planted.length} deliberately wrong answers were flagged (not marked verified); ${goodVerified}/${goodAnswers.length} correct answers were marked verified.`, ``]
+    : []),
   `Average time per question: ${avgMs} ms in total (embed ${avg("embedMs")} ms, answer ${avg("answerMs")} ms, judge ${avg("judgeMs")} ms).`, ``,
   `| Type | Passed |`, `|---|---|`,
   ...Object.entries(byType).map(([t, v]) => `| ${t} | ${v.ok}/${v.n} |`), ``,
   `| ID | Type | Result | Top-1 doc | In top-${TOP_K} | Judge | Answer (ms) | Judge (ms) | Answer |`, `|---|---|---|---|---|---|---|---|---|`,
   ...rows.map((r) => `| ${r.id} | ${r.type} | ${r.pass ? "pass" : "FAIL"} | ${r.top1Ok ? "yes" : "no"} | ${r.retrievalOk ? "yes" : "no"} | ${r.verdict} (${r.score}) | ${r.answerMs} | ${r.judgeMs} | ${esc(r.answer).slice(0, 140)} |`), ``,
-  `Checks: every \`mustContain\` string must appear in the answer; no \`mustNotContain\` string may appear. Documents and questions are synthetic.`, ``,
+  ...(planted.length
+    ? [`Planted wrong answers (judge should not say "verified"):`, ``, `| ID | For | Judge | Unsupported claims | Result | Planted answer |`, `|---|---|---|---|---|---|`,
+       ...planted.map((p) => `| ${p.id} | ${p.questionId} | ${p.verdict} (${p.score}) | ${p.unsupported} | ${p.ok ? "flagged" : "MISSED"} | ${esc(p.answer)} |`), ``]
+    : []),
+  `Checks: every \`mustContain\` string must appear in the answer; no \`mustNotContain\` string may appear. Documents and questions are synthetic.`,
+  `Method notes: retrieval here is vector top-${TOP_K} only; the app also fuses BM25 keyword search and sends every chunk when the collection is small, so app retrieval is at least as good. Prompts are shared with the app (lib/prompts.ts). Judge results are one run at temperature 0; they will vary between runs and models.`, ``,
 ].join("\n");
-writeFileSync(new URL("../docs/eval/results.md", import.meta.url), md);
-console.log(`\n${passed}/${rows.length} passed. Retrieval (answerable only): top-1 ${top1}/${answerable.length}, top-${TOP_K} ${inTopK}/${answerable.length}. Avg per question: ${avgMs} ms (embed ${avg("embedMs")}, answer ${avg("answerMs")}, judge ${avg("judgeMs")}). Estimated cost ~$${totalCost.toFixed(4)}. Wrote docs/eval/results.md`);
+
+const outPath = process.env.EVAL_OUT ? process.env.EVAL_OUT : fileURLToPath(new URL("../docs/eval/results.md", import.meta.url));
+writeFileSync(outPath, md);
+// Also print the table: when this runs as a container job, the logs are the only output that survives.
+console.log(`\n----- results.md -----\n${md}\n----- end results.md -----`);
+console.log(`\n${passed}/${rows.length} passed. Retrieval (answerable only): top-1 ${top1}/${answerable.length}, top-${TOP_K} ${inTopK}/${answerable.length}. Judge flagged ${plantedFlagged}/${planted.length} planted wrong answers. Avg per question: ${avgMs} ms (embed ${avg("embedMs")}, answer ${avg("answerMs")}, judge ${avg("judgeMs")}). Estimated cost ~$${totalCost.toFixed(4)}. Wrote ${outPath}`);
 process.exit(passed === rows.length ? 0 : 1);

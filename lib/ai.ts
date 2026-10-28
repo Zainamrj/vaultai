@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import type { Msg } from "./prompts";
 
 export const MOCK = process.env.MOCK_AI === "true";
 export const EMBED_DIMS = 512; // must be the same for documents and queries
@@ -8,13 +9,14 @@ const client = MOCK
   : new OpenAI({ baseURL: process.env.NEBIUS_BASE_URL!, apiKey: process.env.NEBIUS_API_KEY! });
 
 export const MODELS = {
-  fast: process.env.MODEL_FAST!,
-  main: process.env.MODEL_MAIN!,
-  judge: process.env.MODEL_JUDGE!,
+  fast: process.env.MODEL_FAST!,   // Nemotron Nano: query cleanup
+  main: process.env.MODEL_MAIN!,   // Nemotron Super: grounded answers
+  judge: process.env.MODEL_JUDGE!, // Nemotron Ultra: claim-level verification
   embed: process.env.MODEL_EMBED!,
 };
 
-type Msg = { role: "system" | "user" | "assistant"; content: string };
+/** Marker that makes the MOCK judge flag an answer, so the unsupported-claim UI can be demoed offline. */
+export const MOCK_WRONG_MARKER = "PLANTED_WRONG";
 
 function hashVec(text: string, dim = EMBED_DIMS) {
   const v = new Array(dim).fill(0);
@@ -26,15 +28,18 @@ function hashVec(text: string, dim = EMBED_DIMS) {
   return v;
 }
 
-export async function embed(texts: string[]): Promise<number[][]> {
-  if (MOCK) return texts.map((t) => hashVec(t));
+export async function embed(texts: string[]): Promise<{ vectors: number[][]; tokens?: number }> {
+  if (MOCK) return { vectors: texts.map((t) => hashVec(t)) };
   const res = await client!.embeddings.create({
     model: MODELS.embed,
     input: texts,
     dimensions: EMBED_DIMS,
   });
-  // round to 4 decimals to keep the JSON small
-  return res.data.map((d) => d.embedding.map((x) => Math.round(x * 1e4) / 1e4));
+  return {
+    // round to 4 decimals to keep the JSON small
+    vectors: res.data.map((d) => d.embedding.map((x) => Math.round(x * 1e4) / 1e4)),
+    tokens: res.usage?.total_tokens,
+  };
 }
 
 // Reasoning models spend part of max_tokens "thinking" (the `reasoning` field).
@@ -64,20 +69,33 @@ export async function* chatStream(
   }
 }
 
+/** Non-streaming completion. Returns the text and the token usage reported by the API. */
 export async function chatOnce(
   messages: Msg[],
   model = MODELS.judge,
   maxTokens = 2000
-): Promise<string> {
+): Promise<{ text: string; tokens?: number }> {
   if (MOCK) {
-    return JSON.stringify({
-      claims: [
-        { text: "Mock supported claim", supported: true, sourceChunkId: "1" },
-        { text: "Mock unsupported claim", supported: false, note: "not found in sources" },
-      ],
-      score: 3,
-      verdict: "partial",
-    });
+    const last = messages[messages.length - 1]?.content ?? "";
+    const wrong = last.includes(MOCK_WRONG_MARKER);
+    return {
+      text: JSON.stringify(
+        wrong
+          ? {
+              claims: [{ text: "Mock unsupported claim", supported: false, note: "not found in sources" }],
+              score: 1,
+              verdict: "unverified",
+            }
+          : {
+              claims: [
+                { text: "Mock supported claim", supported: true, sourceChunkId: "1" },
+                { text: "Mock unsupported claim", supported: false, note: "not found in sources" },
+              ],
+              score: 3,
+              verdict: "partial",
+            }
+      ),
+    };
   }
   const res = await client!.chat.completions.create({
     model,
@@ -85,5 +103,5 @@ export async function chatOnce(
     temperature: 0,
     max_tokens: maxTokens,
   });
-  return res.choices[0].message.content ?? "";
+  return { text: res.choices[0].message.content ?? "", tokens: res.usage?.total_tokens };
 }

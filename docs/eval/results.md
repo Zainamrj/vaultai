@@ -1,29 +1,40 @@
 # Evaluation results
 
-Run: 2026-10-27 | Answer model: `nvidia/nemotron-3-super-120b-a12b` | Judge: `nvidia/Nemotron-3-Ultra-550b-a55b` | Embeddings: `Qwen/Qwen3-Embedding-8B` (512 dims) | Top-k: 4
+Run: 2026-10-28 | Answer model: `nvidia/nemotron-3-super-120b-a12b` | Judge: `nvidia/Nemotron-3-Ultra-550b-a55b` | Embeddings: `Qwen/Qwen3-Embedding-8B` (512 dims) | Top-k: 4
 
-**9/10 questions passed.** Retrieval on answerable questions: right document first for 5/7, within the top 4 for 7/7. Estimated cost of the whole run: about $0.0323.
+**10/10 questions passed.** Retrieval on answerable questions: right document first for 7/7, within the top 4 for 7/7. Estimated cost of the whole run: about $0.0422.
 
-Average time per question: 12403 ms in total (embed 8136 ms, answer 2502 ms, judge 1763 ms).
+**Judge check:** 3/3 deliberately wrong answers were flagged (not marked verified); 7/7 correct answers were marked verified.
+
+Average time per question: 4655 ms in total (embed 954 ms, answer 1940 ms, judge 1759 ms).
 
 | Type | Passed |
 |---|---|
 | answerable | 7/7 |
 | unanswerable | 1/1 |
 | extraction | 1/1 |
-| ambiguous | 0/1 |
+| ambiguous | 1/1 |
 
 | ID | Type | Result | Top-1 doc | In top-4 | Judge | Answer (ms) | Judge (ms) | Answer |
 |---|---|---|---|---|---|---|---|---|
-| q1 | answerable | pass | yes | yes | verified (5) | 4127 | 1718 | £569.00 [3] |
-| q2 | answerable | pass | yes | yes | verified (5) | 3927 | 1637 | £455.20 [3] |
-| q3 | answerable | pass | yes | yes | verified (5) | 1477 | 1332 | Each installment is £56.90 and there are 2 installments. [2] |
-| q4 | answerable | pass | no | yes | verified (5) | 3840 | 1688 | The new metformin dose is 1000 mg taken twice daily. [2] |
-| q5 | answerable | pass | no | yes | verified (5) | 1948 | 1332 | Amlodipine 5 mg once daily was added to improve blood pressure control【2】. |
-| q6 | answerable | pass | yes | yes | verified (5) | 872 | 1684 | The HbA1c result at the visit was 8.4 %.[1] |
-| q7 | answerable | pass | yes | yes | verified (5) | 1736 | 1987 | Penicillin [2][3] |
-| q8 | unanswerable | pass | no | yes | verified (5) | 1175 | 1384 | I do not have enough information. |
-| q9 | extraction | pass | no | yes | verified (5) | 2456 | 3688 | [SSN_1] [EMAIL_1] |
-| q10 | ambiguous | FAIL | no | yes | unverified (1) | 3459 | 1184 | I do not have enough information. |
+| q1 | answerable | pass | yes | yes | verified (5) | 4084 | 1589 | £569.00 [3] |
+| q2 | answerable | pass | yes | yes | verified (5) | 1185 | 1578 | £455.20 [3] |
+| q3 | answerable | pass | yes | yes | verified (5) | 1404 | 1503 | Each installment is £56.90 and there are 2 installments in the payment plan. [2] |
+| q4 | answerable | pass | yes | yes | verified (5) | 1336 | 1656 | The new metformin dose is increased to **1000 mg taken twice daily**【1】【3】. |
+| q5 | answerable | pass | yes | yes | verified (5) | 1474 | 1536 | Amlodipine was added to improve blood pressure control at a dose of 5 mg once daily. [1] |
+| q6 | answerable | pass | yes | yes | verified (5) | 817 | 1332 | The HbA1c result at the visit was 8.4 %.[1] |
+| q7 | answerable | pass | yes | yes | verified (5) | 1624 | 1740 | The patient has a penicillin allergy, which manifests as a skin rash【3】. |
+| q8 | unanswerable | pass | no | yes | verified (5) | 1052 | 1201 | I do not have enough information. |
+| q9 | extraction | pass | no | yes | verified (5) | 2420 | 2112 | SSN: [SSN_1] [1] Email: [EMAIL_1] [1] |
+| q10 | ambiguous | pass | no | yes | verified (5) | 4006 | 3343 | - **Lisinopril:** 10 mg once daily – reported in the current medications list [1] and continued in the treatment plan [3]. - **Metformin:**  |
+
+Planted wrong answers (judge should not say "verified"):
+
+| ID | For | Judge | Unsupported claims | Result | Planted answer |
+|---|---|---|---|---|---|
+| p1 | q1 | unverified (1) | 1 | flagged | The total amount charged for the visit before insurance was £659.00 [1]. |
+| p2 | q4 | unverified (1) | 1 | flagged | The new metformin dose is 500 mg once daily [1]. |
+| p3 | q7 | unverified (1) | 1 | flagged | The patient has a documented allergy to sulfa drugs [1]. |
 
 Checks: every `mustContain` string must appear in the answer; no `mustNotContain` string may appear. Documents and questions are synthetic.
+Method notes: retrieval here is vector top-4 only; the app also fuses BM25 keyword search and sends every chunk when the collection is small, so app retrieval is at least as good. Prompts are shared with the app (lib/prompts.ts). Judge results are one run at temperature 0; they will vary between runs and models.

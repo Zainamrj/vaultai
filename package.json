@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --no-warnings --test scripts/test-lib.mjs",
+    "check": "tsc --noEmit && eslint && npm test",
+    "smoke": "node scripts/smoke-api.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.61.0",

@@ -1,13 +1,15 @@
 import { z } from "zod";
-import { chatOnce, MODELS, MOCK } from "@/lib/ai";
+import { chatOnce, chatStream, MODELS, MOCK } from "@/lib/ai";
+import { chatMessages, extractJson, judgeMessages, type SourceChunk } from "@/lib/prompts";
 export const maxDuration = 60;
 
-const JUDGE_PROMPT = `You are a strict fact-checker. You receive a QUESTION, an ANSWER, and numbered SOURCES.
-1. Split the ANSWER into atomic claims.
-2. For each claim decide if it is directly supported by a source. Give the source number.
-3. Score overall grounding 1-5 (5 = every claim supported).
-4. Return ONLY valid JSON, no prose, in this shape:
-{"claims":[{"text":"...","supported":true,"sourceChunkId":"1","note":"..."}],"score":4,"verdict":"verified|partial|unverified"}`;
+const Body = z.object({
+  question: z.string().min(1).max(2000),
+  answer: z.string().min(1).max(8000),
+  chunks: z.array(z.object({ text: z.string().max(6000) })).min(1).max(8),
+  /** Opt-in: if the score is below 3, regenerate once with a strict prompt, re-judge, keep the better. */
+  regenerate: z.boolean().optional(),
+});
 
 const Schema = z.object({
   claims: z.array(
@@ -21,36 +23,76 @@ const Schema = z.object({
   score: z.number().min(1).max(5),
   verdict: z.enum(["verified", "partial", "unverified"]),
 });
+type Judged = z.infer<typeof Schema>;
 
-async function callJudge(question: string, answer: string, sources: string) {
-  const raw = await chatOnce([
-    { role: "system", content: JUDGE_PROMPT },
-    { role: "user", content: `QUESTION: ${question}\n\nANSWER: ${answer}\n\nSOURCES:\n${sources}` },
-  ]);
-  const json = raw.replace(/```json|```/g, "").trim();
-  return Schema.parse(JSON.parse(json));
+const UNVERIFIED: Judged = { claims: [], score: 1, verdict: "unverified" };
+
+/** One judged attempt: up to two model calls, then a safe "unverified" fallback. Never throws. */
+async function judgeOnce(question: string, answer: string, chunks: SourceChunk[]) {
+  const messages = judgeMessages(question, answer, chunks);
+  const t0 = Date.now();
+  let tokens = 0;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await chatOnce(messages, MODELS.judge);
+      tokens += r.tokens ?? 0;
+      // extractJson also copes with fences and reasoning text before/after the JSON
+      return { result: Schema.parse(extractJson(r.text)), messages, tokens, latencyMs: Date.now() - t0, failed: false };
+    } catch {
+      /* retry once, then fall through */
+    }
+  }
+  return { result: UNVERIFIED, messages, tokens, latencyMs: Date.now() - t0, failed: true };
 }
 
 export async function POST(req: Request) {
-  const { question, answer, chunks } = await req.json();
-  const sources = chunks.map((c: { text: string }, i: number) => `[${i + 1}] ${c.text}`).join("\n\n");
-  const t0 = Date.now();
-  let result;
-  try {
-    result = await callJudge(question, answer, sources);
-  } catch {
+  const parsed = Body.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return Response.json({ error: "Invalid request." }, { status: 400 });
+  const { question, answer, chunks, regenerate } = parsed.data;
+
+  const model = MOCK ? "mock" : MODELS.judge;
+  const wireOf = (j: Awaited<ReturnType<typeof judgeOnce>>) => ({
+    model,
+    payload: { messages: j.messages }, // exactly what Nemotron Ultra received
+    tokens: j.tokens || undefined,
+    latencyMs: j.latencyMs,
+  });
+
+  const first = await judgeOnce(question, answer, chunks);
+
+  // A failed judge call is not a low score: only regenerate when the judge actually ran.
+  if (regenerate && !first.failed && first.result.score < 3) {
     try {
-      result = await callJudge(question, answer, sources);
+      const messages = chatMessages(question, chunks, true);
+      const t0 = Date.now();
+      let revised = "";
+      for await (const piece of chatStream(messages, MODELS.main, 1500)) revised += piece;
+      revised = revised.trim();
+      const regenWire = { model: MOCK ? "mock" : MODELS.main, payload: { messages }, latencyMs: Date.now() - t0 };
+
+      if (revised) {
+        const second = await judgeOnce(question, revised, chunks);
+        if (!second.failed && second.result.score > first.result.score) {
+          return Response.json({
+            ...second.result,
+            wire: wireOf(second),
+            regenerated: true,
+            revisedAnswer: revised,
+            regenWire,
+            firstAttempt: first.result,
+          });
+        }
+      }
     } catch {
-      result = { claims: [], score: 1, verdict: "unverified" as const };
+      /* regeneration is best effort: fall through and return the original verdict */
     }
   }
+
+  // verificationFailed: the judge call itself failed twice. That is an infrastructure problem, not a verdict
+  // on the answer, so the UI should say "could not verify" instead of showing a red Unverified badge.
   return Response.json({
-    ...result,
-    wire: {
-      model: MOCK ? "mock" : MODELS.judge,
-      payload: { question, answerChars: answer.length },
-      latencyMs: Date.now() - t0,
-    },
+    ...first.result,
+    wire: wireOf(first),
+    ...(first.failed ? { verificationFailed: true } : {}),
   });
 }
