@@ -1,14 +1,14 @@
 import type { IngestResponse } from "@/types";
 import { SAMPLE_NAME, SAMPLE_URL, type LoadedDoc } from "./doc";
 
-const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_BYTES = 4 * 1024 * 1024;
 
 /** Sends a file to /api/ingest and returns it as a LoadedDoc. Throws Errors with user-readable messages. */
 export async function ingestFile(file: File): Promise<LoadedDoc> {
   const lower = file.name.toLowerCase();
   const isPdf = lower.endsWith(".pdf");
   if (!isPdf && !lower.endsWith(".txt")) throw new Error("Only .txt and .pdf files are supported.");
-  if (file.size > MAX_BYTES) throw new Error("This file is larger than 10 MB. Try a smaller one.");
+  if (file.size > MAX_BYTES) throw new Error("This file is larger than 4 MB. Try a smaller one.");
 
   // The original is read in the browser and never sent anywhere except /api/ingest.
   const original = isPdf ? null : await file.text();
