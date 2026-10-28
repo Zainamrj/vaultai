@@ -23,7 +23,14 @@ export async function ingestFile(file: File): Promise<LoadedDoc> {
     throw new Error("Could not reach the server. Check your connection and try again.");
   }
   if (!res.ok) {
-    throw new Error("The server could not read this file. Scanned (image-only) PDFs are not supported.");
+    let message = "The server could not read this file. Scanned (image-only) PDFs are not supported.";
+    try {
+      const json = (await res.json()) as { error?: unknown };
+      if (typeof json.error === "string" && json.error.trim()) message = json.error;
+    } catch {
+      
+    }
+    throw new Error(message);
   }
 
   const data = (await res.json()) as IngestResponse;
