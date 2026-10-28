@@ -16,5 +16,29 @@
     "questionId": "q7",
     "wrongAnswer": "The patient has a documented allergy to sulfa drugs [1].",
     "note": "The intake form says penicillin; sulfa drugs are not mentioned."
+  },
+  {
+    "id": "p4",
+    "questionId": "q4",
+    "wrongAnswer": "The new metformin dose is 1000 mg once daily [1][3].",
+    "note": "Subtle: right number, wrong frequency. The plan says 1000 mg twice daily."
+  },
+  {
+    "id": "p5",
+    "questionId": "q6",
+    "wrongAnswer": "The HbA1c result at the visit was 7.9% [1].",
+    "note": "Subtle: a real number from the documents, but it is the PREVIOUS HbA1c. The visit result is 8.4%."
+  },
+  {
+    "id": "p6",
+    "questionId": "q2",
+    "wrongAnswer": "The insurance plan paid £455.20, which is 90% of eligible charges [3].",
+    "note": "Subtle: correct amount plus one invented detail. The statement says insurance covers 80%."
+  },
+  {
+    "id": "p7",
+    "questionId": "q5",
+    "wrongAnswer": "Amlodipine 5 mg once daily was added to improve blood pressure control, and the patient was also started on atorvastatin [1].",
+    "note": "Subtle: correct answer plus one invented claim. Atorvastatin is not mentioned anywhere."
   }
 ]
