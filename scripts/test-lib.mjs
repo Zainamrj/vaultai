@@ -148,3 +148,7 @@ test("redact: the same value always maps to the same placeholder", () => {
 test("normalizeCitations: fullwidth brackets become [n]; placeholders untouched", () => {
   assert.equal(normalizeCitations("dose is 1000 mg【1】【3】 and ［2］ [SSN_1]"), "dose is 1000 mg[1][3] and [2] [SSN_1]");
 });
+
+test("normalizeCitations: handles 【3†L1-L2】 style", () => {
+  assert.equal(normalizeCitations("rise to 1000 mg【3†L1-L2】."), "rise to 1000 mg[3].");
+});

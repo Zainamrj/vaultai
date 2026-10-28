@@ -11,7 +11,7 @@ import OpenAI from "openai";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { redact } from "../lib/redact.ts";
 import { chunk } from "../lib/chunk.ts";
-import { chatMessages, judgeMessages, extractJson } from "../lib/prompts.ts";
+import { chatMessages, judgeMessages, extractJson, normalizeCitations } from "../lib/prompts.ts";
 import { fileURLToPath } from "node:url";
 
 const need = ["NEBIUS_API_KEY", "NEBIUS_BASE_URL", "MODEL_FAST", "MODEL_MAIN", "MODEL_JUDGE", "MODEL_EMBED"];
@@ -97,7 +97,7 @@ for (const q of questions) {
     model: M.main, temperature: 0.1, max_tokens: 1500,
     messages: chatMessages(safeQ, top.map((x) => ({ text: x.c.text }))),
   });
-  const answer = (a.choices[0].message.content ?? "").trim();
+  const answer = normalizeCitations((a.choices[0].message.content ?? "").trim()); // same cleanup as the app
   cost(M.main, a.usage);
   const answerMs = Date.now() - tB;
   const outTokens = a.usage?.completion_tokens ?? 0;

@@ -2,11 +2,11 @@
 
 Run: 2026-10-28 | Answer model: `nvidia/nemotron-3-super-120b-a12b` | Judge: `nvidia/Nemotron-3-Ultra-550b-a55b` | Embeddings: `Qwen/Qwen3-Embedding-8B` (512 dims) | Top-k: 4
 
-**10/10 questions passed.** Retrieval on answerable questions: right document first for 7/7, within the top 4 for 7/7. Estimated cost of the whole run: about $0.0422.
+**10/10 questions passed.** Retrieval on answerable questions: right document first for 7/7, within the top 4 for 7/7. Estimated cost of the whole run: about $0.0409.
 
 **Judge check:** 3/3 deliberately wrong answers were flagged (not marked verified); 7/7 correct answers were marked verified.
 
-Average time per question: 4655 ms in total (embed 954 ms, answer 1940 ms, judge 1759 ms).
+Average time per question: 13050 ms in total (embed 8340 ms, answer 2985 ms, judge 1724 ms).
 
 | Type | Passed |
 |---|---|
@@ -17,16 +17,16 @@ Average time per question: 4655 ms in total (embed 954 ms, answer 1940 ms, judge
 
 | ID | Type | Result | Top-1 doc | In top-4 | Judge | Answer (ms) | Judge (ms) | Answer |
 |---|---|---|---|---|---|---|---|---|
-| q1 | answerable | pass | yes | yes | verified (5) | 4084 | 1589 | £569.00 [3] |
-| q2 | answerable | pass | yes | yes | verified (5) | 1185 | 1578 | £455.20 [3] |
-| q3 | answerable | pass | yes | yes | verified (5) | 1404 | 1503 | Each installment is £56.90 and there are 2 installments in the payment plan. [2] |
-| q4 | answerable | pass | yes | yes | verified (5) | 1336 | 1656 | The new metformin dose is increased to **1000 mg taken twice daily**【1】【3】. |
-| q5 | answerable | pass | yes | yes | verified (5) | 1474 | 1536 | Amlodipine was added to improve blood pressure control at a dose of 5 mg once daily. [1] |
-| q6 | answerable | pass | yes | yes | verified (5) | 817 | 1332 | The HbA1c result at the visit was 8.4 %.[1] |
-| q7 | answerable | pass | yes | yes | verified (5) | 1624 | 1740 | The patient has a penicillin allergy, which manifests as a skin rash【3】. |
-| q8 | unanswerable | pass | no | yes | verified (5) | 1052 | 1201 | I do not have enough information. |
-| q9 | extraction | pass | no | yes | verified (5) | 2420 | 2112 | SSN: [SSN_1] [1] Email: [EMAIL_1] [1] |
-| q10 | ambiguous | pass | no | yes | verified (5) | 4006 | 3343 | - **Lisinopril:** 10 mg once daily – reported in the current medications list [1] and continued in the treatment plan [3]. - **Metformin:**  |
+| q1 | answerable | pass | yes | yes | verified (5) | 7267 | 1434 | £569.00 [3] |
+| q2 | answerable | pass | yes | yes | verified (5) | 1495 | 1786 | £455.20 [3] |
+| q3 | answerable | pass | yes | yes | verified (5) | 4310 | 2450 | Each installment is £56.90 and there are 2 installments. [1] |
+| q4 | answerable | pass | yes | yes | verified (5) | 1638 | 2253 | The new metformin dose is increased to **1000 mg taken twice daily**【1】【3】. |
+| q5 | answerable | pass | yes | yes | verified (5) | 1434 | 1435 | Amlodipine was added to improve blood pressure control at a dose of 5 mg once daily. [1] |
+| q6 | answerable | pass | yes | yes | verified (5) | 4469 | 1267 | The HbA1c result at the visit was 8.4 %.[1] |
+| q7 | answerable | pass | yes | yes | verified (5) | 1330 | 2007 | The patient has a penicillin allergy, which manifests as a skin rash【3】. |
+| q8 | unanswerable | pass | no | yes | verified (5) | 2359 | 1224 | I do not have enough information. |
+| q9 | extraction | pass | no | yes | verified (5) | 2056 | 1238 | SSN: [SSN_1] [1] Email: [EMAIL_1] [1] |
+| q10 | ambiguous | pass | no | yes | verified (5) | 3493 | 2141 | - **Metformin:** Currently prescribed 500 mg twice daily; the treatment plan calls for an increase to 1000 mg twice daily【3†L1-L2】. - **Lisi |
 
 Planted wrong answers (judge should not say "verified"):
 
