@@ -60,23 +60,26 @@ console.log(`Loaded ${files.length} documents, ${chunks.length} chunks. Answer m
 // ---------- run questions ----------
 const flagged = (v, sc) => v !== "verified" || (typeof sc === "number" && sc <= 3);
 
-/** One judge call with the shared prompt. Returns the parsed verdict plus timing. */
+/** Judge call with the shared prompt. Up to 2 attempts (like the app), 4000 tokens so reasoning cannot cut the JSON off. */
 async function runJudge(safeQ, answer, top) {
   const t = Date.now();
-  const j = await client.chat.completions.create({
-    model: judgeModel, temperature: 0, max_tokens: 2000,
-    messages: judgeMessages(safeQ, answer, top.map((x) => ({ text: x.c.text }))),
-  });
-  cost(judgeModel, j.usage);
-  const ms = Date.now() - t;
-  const raw = j.choices[0].message.content ?? "";
-  try {
-    const js = extractJson(raw);
-    return { verdict: js.verdict, score: js.score, claims: js.claims ?? [], ms };
-  } catch {
-    console.log(`      judge output could not be parsed (finish_reason: ${j.choices[0].finish_reason}, ${j.usage?.completion_tokens} tokens): ${raw.replace(/\s+/g, " ").slice(0, 300) || "(empty)"}`);
-    return { verdict: "invalid-json", score: "-", claims: [], ms };
+  let lastNote = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const j = await client.chat.completions.create({
+      model: judgeModel, temperature: attempt ? 0.2 : 0, max_tokens: 4000,
+      messages: judgeMessages(safeQ, answer, top.map((x) => ({ text: x.c.text }))),
+    });
+    cost(judgeModel, j.usage);
+    const raw = j.choices[0].message.content ?? "";
+    try {
+      const js = extractJson(raw);
+      return { verdict: js.verdict, score: js.score, claims: js.claims ?? [], ms: Date.now() - t };
+    } catch {
+      lastNote = `finish_reason: ${j.choices[0].finish_reason}, ${j.usage?.completion_tokens} tokens`;
+      console.log(`      judge output could not be parsed (attempt ${attempt + 1}; ${lastNote}): ${raw.replace(/\s+/g, " ").slice(0, 200) || "(empty)"}`);
+    }
   }
+  return { verdict: "invalid-json", score: "-", claims: [], ms: Date.now() - t };
 }
 
 const rows = [];
@@ -122,9 +125,9 @@ for (const p of plantedList) {
   const ctx = topByQuestion.get(p.questionId);
   if (!ctx) { console.warn(`planted ${p.id}: unknown questionId ${p.questionId}, skipped`); continue; }
   const r = await runJudge(ctx.safeQ, p.wrongAnswer, ctx.top);
-  const ok = flagged(r.verdict, r.score);
+  const ok = r.verdict !== "invalid-json" && flagged(r.verdict, r.score); // a judge that failed to answer has not flagged anything
   planted.push({ id: p.id, questionId: p.questionId, answer: p.wrongAnswer, verdict: r.verdict, score: r.score, unsupported: r.claims.filter((c) => c.supported === false).length, ok, ms: r.ms });
-  console.log(`${ok ? "FLAGGED " : "MISSED  "} ${p.id} (planted wrong answer to ${p.questionId})  judge:${r.verdict}/${r.score}  | judge ${r.ms} ms`);
+  console.log(`${ok ? "FLAGGED " : r.verdict === "invalid-json" ? "NOJUDGE " : "MISSED  "} ${p.id} (planted wrong answer to ${p.questionId})  judge:${r.verdict}/${r.score}  | judge ${r.ms} ms`);
 }
 
 // ---------- summary + results.md ----------
@@ -155,7 +158,7 @@ const md = [
   ...rows.map((r) => `| ${r.id} | ${r.type} | ${r.pass ? "pass" : "FAIL"} | ${r.top1Ok ? "yes" : "no"} | ${r.retrievalOk ? "yes" : "no"} | ${r.verdict} (${r.score}) | ${r.answerMs} | ${r.judgeMs} | ${esc(r.answer).slice(0, 140)} |`), ``,
   ...(planted.length
     ? [`Planted wrong answers (judge should not say "verified"):`, ``, `| ID | For | Judge | Unsupported claims | Result | Planted answer |`, `|---|---|---|---|---|---|`,
-       ...planted.map((p) => `| ${p.id} | ${p.questionId} | ${p.verdict} (${p.score}) | ${p.unsupported} | ${p.ok ? "flagged" : "MISSED"} | ${esc(p.answer)} |`), ``]
+       ...planted.map((p) => `| ${p.id} | ${p.questionId} | ${p.verdict} (${p.score}) | ${p.unsupported} | ${p.ok ? "flagged" : p.verdict === "invalid-json" ? "JUDGE FAILED (not counted)" : "MISSED"} | ${esc(p.answer)} |`), ``]
     : []),
   `Checks: every \`mustContain\` string must appear in the answer; no \`mustNotContain\` string may appear. Documents and questions are synthetic.`,
   `Method notes: retrieval here is vector top-${TOP_K} only; the app also fuses BM25 keyword search and sends every chunk when the collection is small, so app retrieval is at least as good. Prompts are shared with the app (lib/prompts.ts). Judge results are one run at temperature 0; they will vary between runs and models.`, ``,

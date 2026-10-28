@@ -34,7 +34,7 @@ async function judgeOnce(question: string, answer: string, chunks: SourceChunk[]
   let tokens = 0;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const r = await chatOnce(messages, MODELS.judge);
+      const r = await chatOnce(messages, MODELS.judge, 4000);
       tokens += r.tokens ?? 0;
       // extractJson also copes with fences and reasoning text before/after the JSON
       return { result: Schema.parse(extractJson(r.text)), messages, tokens, latencyMs: Date.now() - t0, failed: false };
