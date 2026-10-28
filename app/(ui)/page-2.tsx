@@ -6,6 +6,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { RedactionPreview, countByType } from "@/components/RedactionPreview";
 import { SampleButton, UploadZone } from "@/components/UploadZone";
 import { styleFor } from "@/components/Highlighted";
+import { ChatTab, type ChatMessage } from "@/components/ChatTab";
+import { embedChunks, type StoredChunk } from "@/lib/rag-client";
 import type { LoadedDoc } from "@/components/doc";
 
 type Tab = "chat" | "documents" | "privacy";
@@ -15,17 +17,38 @@ const TABS: { id: Tab; label: string; Icon: LucideIcon }[] = [
   { id: "privacy", label: "Privacy", Icon: ShieldCheck },
 ];
 
+type IndexState = "indexing" | "ready" | "failed";
+
+const chunkKey = (c: StoredChunk) => `${c.docId}:${c.id}`;
+
 export default function Home() {
   const [tab, setTab] = useState<Tab>("documents");
   const [docs, setDocs] = useState<LoadedDoc[]>([]);
+  // Session state held in the browser: embedded chunks and the conversation.
+  const [store, setStore] = useState<StoredChunk[]>([]);
+  const [indexState, setIndexState] = useState<Record<string, IndexState>>({});
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const pending = docs.find((d) => !d.approved);
   const approved = docs.filter((d) => d.approved);
 
   const addDoc = (d: LoadedDoc) => setDocs((prev) => [...prev.filter((x) => x.docId !== d.docId), d]);
-  const approve = (id: string) =>
-    // TODO(3.2/3.3): embed the chunks via /api/embed here and store vectors in the session store.
-    setDocs((prev) => prev.map((d) => (d.docId === id ? { ...d, approved: true } : d)));
+  function approve(doc: LoadedDoc) {
+    // Approve right away. Chat works on keyword search until the embeddings arrive.
+    const initial: StoredChunk[] = doc.chunks.map((c) => ({ ...c, docName: doc.name }));
+    setStore((prev) => [...prev, ...initial]);
+    setDocs((prev) => prev.map((d) => (d.docId === doc.docId ? { ...d, approved: true } : d)));
+    setIndexState((prev) => ({ ...prev, [doc.docId]: "indexing" }));
+
+    // Embed in the background (the endpoint can take 0.5 to 13 s) and swap the vectors in when done.
+    embedChunks(doc.chunks, doc.name)
+      .then(({ stored }) => {
+        const byKey = new Map(stored.map((c) => [chunkKey(c), c]));
+        setStore((prev) => prev.map((c) => byKey.get(chunkKey(c)) ?? c));
+        setIndexState((prev) => ({ ...prev, [doc.docId]: "ready" }));
+      })
+      .catch(() => setIndexState((prev) => ({ ...prev, [doc.docId]: "failed" })));
+  }
   const discard = (id: string) => setDocs((prev) => prev.filter((d) => d.docId !== id));
 
   const toDocuments = (
@@ -76,7 +99,11 @@ export default function Home() {
         {tab === "documents" && (
           <div role="tabpanel" id="panel-documents" aria-labelledby="tab-documents" className="space-y-8">
             {pending ? (
-              <RedactionPreview doc={pending} onApprove={() => approve(pending.docId)} onDiscard={() => discard(pending.docId)} />
+              <RedactionPreview
+                doc={pending}
+                onApprove={() => approve(pending)}
+                onDiscard={() => discard(pending.docId)}
+              />
             ) : (
               <div className="space-y-4">
                 <UploadZone onDoc={addDoc} />
@@ -97,7 +124,12 @@ export default function Home() {
                     <li key={d.docId} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
                       <span className="font-medium">{d.name}</span>
                       <span className="text-[#8E99A8]">
-                        {d.entities.length} values hidden · {d.chunks.length} passages
+                        {d.entities.length} values hidden · {d.chunks.length} passages ·{" "}
+                        {indexState[d.docId] === "ready"
+                          ? "semantic search ready"
+                          : indexState[d.docId] === "failed"
+                            ? "keyword search only"
+                            : "indexing…"}
                       </span>
                     </li>
                   ))}
@@ -116,18 +148,7 @@ export default function Home() {
                 action={toDocuments}
               />
             ) : (
-              <div className="space-y-4">
-                <p className="text-sm text-[#8E99A8]">
-                  Ready to answer questions about {approved.length} document{approved.length === 1 ? "" : "s"}.
-                </p>
-                {/* TODO(3.5): streaming chat UI, source cards, judge badge */}
-                <input
-                  disabled
-                  placeholder="Chat is coming next"
-                  aria-label="Question"
-                  className="w-full rounded-md border border-[#28303B] bg-[#151A21] px-4 py-3 text-sm opacity-60"
-                />
-              </div>
+              <ChatTab store={store} docCount={approved.length} messages={messages} setMessages={setMessages} />
             )}
           </div>
         )}
