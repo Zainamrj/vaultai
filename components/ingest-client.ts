@@ -11,7 +11,7 @@ export async function ingestFile(file: File): Promise<LoadedDoc> {
   if (file.size > MAX_BYTES) throw new Error("This file is larger than 4 MB. Try a smaller one.");
 
   // The original is read in the browser and never sent anywhere except /api/ingest.
-  const original = isPdf ? null : await file.text();
+  const localOriginal = isPdf ? null : await file.text();
 
   const body = new FormData();
   body.append("file", file); // field name "file": change here if the endpoint expects another
@@ -33,11 +33,11 @@ export async function ingestFile(file: File): Promise<LoadedDoc> {
     throw new Error(message);
   }
 
-  const data = (await res.json()) as IngestResponse;
+  const data = (await res.json()) as IngestResponse & { originalText?: string };
   return {
     docId: data.docId,
     name: file.name,
-    original,
+    original: typeof data.originalText === "string" ? data.originalText : localOriginal,
     redactedText: data.redactedText,
     entities: data.entities,
     chunks: data.chunks,
