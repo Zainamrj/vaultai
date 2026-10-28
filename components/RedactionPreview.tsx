@@ -54,7 +54,7 @@ export function RedactionPreview({
 
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <h3 className="mb-2 text-sm font-medium text-[#8E99A8]">Original (stays in your browser)</h3>
+          <h3 className="mb-2 text-sm font-medium text-[#8E99A8]">Original (never sent to a model)</h3>
           <pre className="doc-text max-h-[60vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-[#28303B] bg-[#0A0D11] p-4 text-[13px] leading-6">
             {doc.original === null ? (
               <span className="text-[#8E99A8]">
