@@ -11,6 +11,9 @@ export const TYPE_STYLE: Record<string, string> = {
   CARD: "bg-orange-400/20 text-orange-200 ring-orange-400/40",
   DATE: "bg-teal-400/20 text-teal-200 ring-teal-400/40",
   ID: "bg-lime-400/20 text-lime-200 ring-lime-400/40",
+  ORG: "bg-indigo-400/20 text-indigo-200 ring-indigo-400/40",
+  MRN: "bg-pink-400/20 text-pink-200 ring-pink-400/40",
+  ACCOUNT: "bg-cyan-400/20 text-cyan-200 ring-cyan-400/40",
 };
 const FALLBACK = "bg-slate-400/20 text-slate-200 ring-slate-400/40";
 
