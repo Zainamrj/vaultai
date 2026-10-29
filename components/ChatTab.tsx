@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { AlertTriangle, Check, Loader2, Send, X } from "lucide-react";
 import { judgeAnswer, retrieve, streamAnswer, type StoredChunk } from "@/lib/rag-client";
-import type { JudgeResponse, Wire } from "@/types";
+import type { AuditInput } from "@/lib/audit";
+import type { JudgeResponse, Wire, WireRecord } from "@/types";
 
 export type ChatMessage = {
   id: string;
@@ -18,6 +19,8 @@ export type ChatMessage = {
   retrieveWire?: Wire;
   answerWire?: Wire;
   judge?: JudgeResponse | null;
+  /** The first answer, kept when the judge regenerated it. `text` then holds the revised answer. */
+  originalText?: string;
   judgeFailed?: boolean;
   error?: string;
 };
@@ -97,6 +100,7 @@ function AssistantMessage({ m }: { m: ChatMessage }) {
   const claims = m.judge?.claims ?? [];
   const supported = claims.filter((c) => c.supported).length;
   const isMock = m.text.startsWith("[MOCK]");
+  const verifyFailed = m.judgeFailed || m.judge?.verificationFailed;
   const chips = [wireLabel(m.answerWire), wireLabel(m.judge?.wire)].filter((c): c is string => Boolean(c));
 
   return (
@@ -114,6 +118,21 @@ function AssistantMessage({ m }: { m: ChatMessage }) {
         </p>
       )}
 
+      {m.originalText !== undefined && (
+        <div className="mt-3 text-xs text-[#8E99A8]">
+          <p>
+            Revised: the first answer scored {m.judge?.firstAttempt?.score ?? "low"}/5, so it was regenerated and checked
+            again. The badge below applies to this version.
+          </p>
+          <details className="mt-1">
+            <summary className="cursor-pointer hover:text-[#E7EAEE]">Show the first answer</summary>
+            <p className="mt-2 whitespace-pre-wrap rounded-md border border-[#28303B] bg-[#0A0D11] p-3 text-[13px] leading-relaxed text-[#C9CFD8]">
+              {m.originalText}
+            </p>
+          </details>
+        </div>
+      )}
+
       {m.status === "error" && (
         <p role="alert" className="flex items-start gap-2 text-sm text-rose-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -127,7 +146,7 @@ function AssistantMessage({ m }: { m: ChatMessage }) {
         </p>
       )}
 
-      {m.status === "done" && m.judge && (
+      {m.status === "done" && m.judge && !m.judge.verificationFailed && (
         <div className="mt-3 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset ${badge.cls}`}>{badge.label}</span>
@@ -176,7 +195,7 @@ function AssistantMessage({ m }: { m: ChatMessage }) {
         </div>
       )}
 
-      {m.status === "done" && m.judgeFailed && (
+      {m.status === "done" && verifyFailed && (
         <p className="mt-3 text-xs text-amber-300">Could not verify this answer. Treat it as unchecked.</p>
       )}
 
@@ -229,11 +248,17 @@ export function ChatTab({
   docCount,
   messages,
   setMessages,
+  onWire,
+  onAudit,
 }: {
   store: StoredChunk[];
   docCount: number;
   messages: ChatMessage[];
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
+  /** Called for every model call, so the Wire Inspector can show it. */
+  onWire: (endpoint: WireRecord["endpoint"], wire: Wire | undefined) => void;
+  /** Called for every action, so the audit log can record it. */
+  onAudit: (entry: Omit<AuditInput, "ts">) => void;
 }) {
   const [input, setInput] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
@@ -261,14 +286,27 @@ export function ChatTab({
     try {
       const found = await retrieve(question, store, 4);
       const top = found.hits.map((h) => h.chunk);
+      const docIds = [...new Set(top.map((c) => c.docId))];
+      onWire("/api/embed", found.wire);
+      onWire("/api/rewrite", found.rewrite?.wire);
       patch((m) => ({ ...m, status: "streaming", sources: top, mode: found.mode, retrieveWire: found.wire }));
 
       const res = await streamAnswer(question, top, (_piece, soFar) => patch((m) => ({ ...m, text: soFar })));
       patch((m) => ({ ...m, text: res.text, status: "verifying", answerWire: res.wire }));
+      onWire("/api/chat", res.wire);
+      onAudit({ action: "ask", docIds, model: res.wire.model, latencyMs: res.wire.latencyMs });
 
       try {
-        const judge = await judgeAnswer(question, res.text, top);
-        patch((m) => ({ ...m, judge, status: "done" }));
+        const judge = await judgeAnswer(question, res.text, top, { regenerate: true });
+        // If the judge regenerated the answer, show the revised text: the verdict is for that version.
+        const revised = judge.revisedAnswer?.trim();
+        patch((m) => ({ ...m, judge, status: "done", ...(revised ? { text: revised, originalText: m.text } : {}) }));
+        onWire("/api/judge", judge.wire);
+        onAudit({ action: "judge", docIds, model: judge.wire.model, tokens: judge.wire.tokens, latencyMs: judge.wire.latencyMs });
+        if (judge.regenWire) {
+          onWire("/api/judge", judge.regenWire);
+          onAudit({ action: "regenerate", docIds, model: judge.regenWire.model, tokens: judge.regenWire.tokens, latencyMs: judge.regenWire.latencyMs });
+        }
       } catch {
         patch((m) => ({ ...m, judgeFailed: true, status: "done" }));
       }
