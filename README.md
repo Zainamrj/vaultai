@@ -4,6 +4,8 @@
 
 Built for the **Nebius x NVIDIA Global AI Hackathon**, track: **Best Apps and Agents**.
 
+AI inference runs on **Nebius Token Factory** (NVIDIA Nemotron Nano, Super and Ultra, plus Qwen3-Embedding-8B). The web app is hosted on Vercel.
+
 - Live demo: https://vaultai-theta.vercel.app/
 - Demo video: `TODO: add YouTube link`
 - License: MIT
@@ -20,7 +22,7 @@ Teams in healthcare, finance and legal want to use AI on their documents, but th
 2. **Shows you the result before it is used.** A side-by-side preview (original vs. redacted) lets a person approve a document.
 3. **Answers with citations.** Questions are answered by Nemotron Super from the most relevant redacted passages, with `[1]`-style citations.
 4. **Verifies every answer.** Nemotron Ultra acts as an independent judge. It splits the answer into claims and marks each one as supported or unsupported by the sources. If the first check scores low, the answer can be regenerated once with a stricter prompt and re-checked, keeping the better result.
-5. **Shows its work.** A Wire Inspector displays the exact payload sent to the model for each request, an audit log records what was queried and when, and a Purge button clears the session and returns a receipt. *(The audit log, wire records and purge receipt are implemented in `lib/audit.ts`; the Privacy tab UI is in progress.)*
+5. **Shows its work.** A Wire Inspector displays the exact payload sent to the model for each request, an audit log records what was queried and when, and a Purge button clears the session and returns a receipt.
 
 User questions are redacted too, so personal data typed into the chat box does not reach the model either.
 
@@ -31,10 +33,12 @@ flowchart LR
   U[Browser UI] -->|file| I["/api/ingest: extract + redact + chunk"]
   I --> U
   U -->|redacted chunks| E["/api/embed"]
+  U -->|question| W["/api/rewrite: Nemotron Nano"]
   U -->|question + top-k chunks| C["/api/chat: Nemotron Super"]
   C --> U
   U -->|answer + sources| J["/api/judge: Nemotron Ultra"]
   E --> N[Nebius Token Factory]
+  W --> N
   C --> N
   J --> N
 ```
@@ -129,13 +133,16 @@ app/api/embed    embeddings via Token Factory
 app/api/chat     grounded, cited, streamed answers
 app/api/judge    claim-by-claim verification (optional one-time regeneration)
 app/api/rewrite  query cleanup with Nemotron Nano
+app/page.tsx     the single-page UI (Documents, Chat and Privacy tabs)
+components/      upload, redaction preview, chat with citations and judge badge, Privacy tab
+lib/rag-client.ts  browser-side retrieval, streaming and judge calls
 lib/redact.ts    PII detection and placeholder mapping
 lib/chunk.ts     paragraph-first chunking with overlap
 lib/ai.ts        Token Factory client with a mock mode
 lib/prompts.ts   every prompt, shared by the API, the Wire Inspector and the eval
 lib/audit.ts     hash-chained audit log, wire records, purge receipt
 scripts/         model listing, end-to-end test, eval harness, unit tests
-Dockerfile.eval  runs the eval as a container / Nebius Serverless Job (docs/serverless-job.md)
+Dockerfile.eval  container definition for running the eval as a Nebius Serverless Job (not run yet; see docs/serverless-job.md)
 docs/            test documents, eval questions and results
 ```
 
@@ -150,10 +157,13 @@ We would rather be clear about what this prototype does not do.
 - **The judge is a model, so it can be wrong.** It reduces unsupported answers but does not guarantee zero hallucination.
 - **Embeddings are not NVIDIA models.** Embeddings use Qwen3-Embedding-8B because it was the only embedding model on Token Factory at build time.
 - **Demo data is synthetic.** Do not upload real personal data to a demo deployment.
+- **The evaluation is small.** Ten questions and seven planted wrong answers on three synthetic documents, single runs at temperature 0. Treat it as a smoke test, not a benchmark.
+- **Other Nebius tools.** We used Token Factory only. We did not deploy on Serverless Endpoints and did not run the eval as a Serverless Job.
 
 ## Team
 
-- `TODO: names and roles`
+- Zaina Meraj: backend, Token Factory integration, redaction, judge and evaluation
+- Ariana Hossain: frontend, UX and the Privacy tab
 
 ## License
 
