@@ -55,18 +55,19 @@ Session data (redacted chunks, vectors, audit log) lives **in the browser**. The
 | Embeddings | `Qwen/Qwen3-Embedding-8B` | The only embedding model listed on Token Factory when we built this. It is not an NVIDIA model. Generation and judging are all Nemotron. |
 
 ### Where Token Factory accelerated our workflow
-
 - **OpenAI-compatible API.** We used the standard `openai` package and only changed the base URL, so integration took minutes.
 - **Several Nemotron sizes behind one API.** We route each task to the smallest model that does it well, instead of running everything on one large model.
 - **Low per-token prices.** A full question (retrieve, answer, judge) cost well under a cent in our tests, so we could run evaluations repeatedly.
 - **Embedding `dimensions` parameter.** We request 512 instead of the default 4,096 dimensions, which keeps browser-side retrieval payloads small.
-- **Measured on our final eval run (Oct 28):** about $0.055 for the whole run including judging; about 5 s per question end to end (embedding ~0.9 s, answer ~1.7 s, judge ~2.6 s). Occasional API calls were slower (one judge call took 20 s in an earlier run).
+- **Measured on our final eval run (Oct 29):** about $0.058 for the whole run (13 questions plus 7 extra judge checks); about 4.9 s per question end to end on average (embedding ~1.5 s, answer ~1.8 s, judge ~1.6 s). Latency varied: one embedding call took 10 s in this run, and an earlier judge call took 20 s.
 
 ## Evaluation
 
-Final run (Oct 28, two consecutive runs gave the same verdicts): **10/10 questions passed.** The right document was retrieved first for 7/7 answerable questions. The Nemotron Ultra judge flagged **7/7** deliberately wrong answers, including four subtle ones (a near-right dose, the previous lab value, a correct answer plus one invented detail), and marked 7/7 correct answers verified. Limits: small synthetic data, single runs at temperature 0, vector-only retrieval in the eval (the app also uses keyword search). During development q1 failed once on a too-strict string check ("£569" vs "£569.00"); the answer was correct, so we loosened the check. Full table: `docs/eval/results.md`.
+Final run (Oct 29): **13/13 questions passed.** The right document was retrieved first for 7/7 answerable questions. The Nemotron Ultra judge flagged **7/7** deliberately wrong answers (5 as unverified, 2 as partial), including four subtle ones (a near-right dose, the previous lab value, a correct answer plus one invented detail), and marked all 13 correct answers verified. The set includes a document with an embedded prompt-injection instruction (ignored), a question that needs two documents, and an amendment that overrides an earlier value.
 
-We test with three synthetic documents (clinic intake, clinic visit summary, billing statement) and 10 questions: 7 answerable from the documents and 3 traps (an answer that is not in the documents, an attempt to extract a redacted value, and an ambiguous question). We also give the judge 7 deliberately wrong answers (`docs/eval/planted-wrong.json`) and check that it does not mark them verified. Run it with `node --env-file=.env.local scripts/eval.mjs`. Results are in `docs/eval/results.md`.
+Limits of this result: small synthetic data, single runs at low temperature, and the eval uses vector-only retrieval (the app also uses keyword search). During development q1 failed once on a too-strict string check ("£569" vs "£569.00"); the answer was correct, so we loosened the check. Full table: `docs/eval/results.md`.
+
+We test with four synthetic documents (clinic intake, clinic visit summary, billing statement and a vendor agreement) and 13 questions: 7 answerable from the documents, and 6 harder cases (an answer that is not in the documents, an attempt to extract a redacted value, an ambiguous question, a document with an embedded prompt-injection instruction, a question that needs two documents, and an amendment that overrides an earlier value). We also give the judge 7 deliberately wrong answers (`docs/eval/planted-wrong.json`) and check that it does not mark them verified. Run it with `node --env-file=.env.local scripts/eval.mjs`. Results are in `docs/eval/results.md`.
 
 ## Run it locally
 
@@ -157,7 +158,7 @@ We would rather be clear about what this prototype does not do.
 - **The judge is a model, so it can be wrong.** It reduces unsupported answers but does not guarantee zero hallucination.
 - **Embeddings are not NVIDIA models.** Embeddings use Qwen3-Embedding-8B because it was the only embedding model on Token Factory at build time.
 - **Demo data is synthetic.** Do not upload real personal data to a demo deployment.
-- **The evaluation is small.** Ten questions and seven planted wrong answers on three synthetic documents, single runs at temperature 0. Treat it as a smoke test, not a benchmark.
+- **The evaluation is small.** Thirteen questions and seven planted wrong answers on four synthetic documents, single runs at low temperature. Treat it as a smoke test, not a benchmark.
 - **Other Nebius tools.** We used Token Factory only. We did not deploy on Serverless Endpoints and did not run the eval as a Serverless Job.
 
 ## Team
