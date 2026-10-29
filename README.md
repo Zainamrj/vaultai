@@ -4,7 +4,7 @@
 
 Built for the **Nebius x NVIDIA Global AI Hackathon**, track: **Best Apps and Agents**.
 
-- Live demo: `TODO: add URL`
+- Live demo: https://vaultai-theta.vercel.app/
 - Demo video: `TODO: add YouTube link`
 - License: MIT
 
@@ -62,7 +62,7 @@ Session data (redacted chunks, vectors, audit log) lives **in the browser**. The
 
 Final run (Oct 28, two consecutive runs gave the same verdicts): **10/10 questions passed.** The right document was retrieved first for 7/7 answerable questions. The Nemotron Ultra judge flagged **7/7** deliberately wrong answers, including four subtle ones (a near-right dose, the previous lab value, a correct answer plus one invented detail), and marked 7/7 correct answers verified. Limits: small synthetic data, single runs at temperature 0, vector-only retrieval in the eval (the app also uses keyword search). During development q1 failed once on a too-strict string check ("£569" vs "£569.00"); the answer was correct, so we loosened the check. Full table: `docs/eval/results.md`.
 
-We test with three synthetic documents (clinic intake, clinic visit summary, billing statement) and 10 questions: 7 answerable from the documents and 3 traps (an answer that is not in the documents, an attempt to extract a redacted value, and an ambiguous question). We also give the judge 3 deliberately wrong answers (`docs/eval/planted-wrong.json`) and check that it does not mark them verified. Run it with `node --env-file=.env.local scripts/eval.mjs`. Results are in `docs/eval/results.md`.
+We test with three synthetic documents (clinic intake, clinic visit summary, billing statement) and 10 questions: 7 answerable from the documents and 3 traps (an answer that is not in the documents, an attempt to extract a redacted value, and an ambiguous question). We also give the judge 7 deliberately wrong answers (`docs/eval/planted-wrong.json`) and check that it does not mark them verified. Run it with `node --env-file=.env.local scripts/eval.mjs`. Results are in `docs/eval/results.md`.
 
 ## Run it locally
 
