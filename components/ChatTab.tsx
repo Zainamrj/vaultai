@@ -57,7 +57,11 @@ function wireLabel(w: Wire | undefined): string | null {
 }
 
 function jumpTo(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("ring-2", "ring-[#D2AE6D]");
+  setTimeout(() => el.classList.remove("ring-2", "ring-[#D2AE6D]"), 1200);
 }
 
 function AnswerText({ text, msgId, maxSource }: { text: string; msgId: string; maxSource: number }) {
