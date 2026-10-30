@@ -7,7 +7,7 @@ Built for the **Nebius x NVIDIA Global AI Hackathon**, track: **Best Apps and Ag
 AI inference runs on **Nebius Token Factory** (NVIDIA Nemotron Nano, Super and Ultra, plus Qwen3-Embedding-8B). The web app is hosted on Vercel.
 
 - Live demo: https://vaultai-theta.vercel.app/
-- Demo video:
+- Demo video: https://youtu.be/Y47jmP9IrmE
 - License: MIT
 
 ---
